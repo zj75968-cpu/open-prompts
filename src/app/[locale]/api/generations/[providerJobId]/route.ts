@@ -1,6 +1,5 @@
-import { decodeProviderJobId, getProviderRegistry } from '~/lib/generation/registry';
-import { createAtlascloudProviderWithOptions } from '~/lib/generation/providers/atlascloud';
-import { createReplicateProviderWithOptions } from '~/lib/generation/providers/replicate';
+import { decodeProviderJobId } from '~/lib/generation/registry';
+import { resolveGenerationProvider } from '~/lib/generation/provider-runtime';
 
 function safeId() {
   return (
@@ -47,12 +46,7 @@ export async function GET(req: Request, props: { params: Promise<{ providerJobId
     providerJobId,
     hasApiKeyOverride: Boolean(apiKey),
   });
-  const provider =
-    apiKey && providerName === 'atlascloud'
-      ? createAtlascloudProviderWithOptions({ apiKey })
-      : apiKey && providerName === 'replicate'
-        ? createReplicateProviderWithOptions({ token: apiKey })
-        : getProviderRegistry()[providerName];
+  const provider = resolveGenerationProvider(providerName, apiKey);
   if (!provider) {
     return new Response(JSON.stringify({ error: `Unknown provider: ${providerName}` }), {
       status: 400,

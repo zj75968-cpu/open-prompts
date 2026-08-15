@@ -1,7 +1,6 @@
-import { getProviderRegistry, getDefaultProviderName, encodeProviderJobId } from '~/lib/generation/registry';
+import { getDefaultProviderName, encodeProviderJobId } from '~/lib/generation/registry';
+import { resolveGenerationProvider } from '~/lib/generation/provider-runtime';
 import type { GenerationCreateParams } from '~/lib/generation/types';
-import { createAtlascloudProviderWithOptions } from '~/lib/generation/providers/atlascloud';
-import { createReplicateProviderWithOptions } from '~/lib/generation/providers/replicate';
 import {
   canConsumeCredits,
   consumeCredits,
@@ -144,12 +143,7 @@ export async function POST(req: Request) {
     promptPreview: preview(prompt),
   });
 
-  const provider =
-    apiKey && providerName === 'atlascloud'
-      ? createAtlascloudProviderWithOptions({ apiKey })
-      : apiKey && providerName === 'replicate'
-        ? createReplicateProviderWithOptions({ token: apiKey })
-        : getProviderRegistry()[providerName];
+  const provider = resolveGenerationProvider(providerName, apiKey);
   if (!provider) {
     return new Response(JSON.stringify({ error: `Unknown provider: ${providerName}` }), {
       status: 400,
@@ -163,7 +157,7 @@ export async function POST(req: Request) {
       negativePrompt: json.negativePrompt,
       model: json.model,
       aspectRatio: json.aspectRatio,
-      quality: 'medium',
+      quality: json.quality,
       count: json.count,
     });
     console.info('[op:generation:create:done]', {

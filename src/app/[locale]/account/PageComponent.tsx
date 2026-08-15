@@ -2,211 +2,80 @@
 
 import './account-page.css';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import {
-  accountPanelHref,
-  type ResolvedAccountPanel,
-} from '~/lib/account/account-path';
+import { accountPanelHref } from '~/lib/account/account-path';
 import { OpenPromptsSiteFooter } from '~/components/open-prompts/OpenPromptsSiteFooter';
 import { OpenPromptsSiteHeader } from '~/components/open-prompts/OpenPromptsSiteHeader';
 import { UserAvatar } from '~/components/open-prompts/UserAvatar';
-import { localeApiPath } from '~/lib/locale-api-path';
 import {
   PromptTemplateDetailDialog,
   templateRecordToDetailItem,
   type PromptDetailItem,
 } from '~/components/prompt-gallery/PromptTemplateDetailDialog';
 import type { AdminTemplateRecord, TemplateRecord } from '~/lib/prompts/template-types';
-import type { AdminUserDetail, AdminUserSummary } from '~/lib/users/admin-user-record';
-import {
-  ADMIN_USER_TREND_RANGES,
-  type DailyCountPoint,
-  type AdminUserTrendRange,
-} from '~/lib/users/admin-user-trend';
+import { ADMIN_USER_TREND_RANGES, type DailyCountPoint, type AdminUserTrendRange } from '~/lib/users/admin-user-trend';
 import { submitEditorHref } from '~/lib/prompts/submit-editor-path';
 import {
-  buildMyTemplatesQuery,
-  myTemplatesPageKey,
-  parseMyTemplatesPage,
-  type MyTemplatesPage,
-} from '~/lib/account/my-templates-page';
+  displayStatus,
+  formatJoinedAt,
+  formatProviderLabels,
+  formatReviewDate,
+  smoothTrendPath,
+  trendDayLabel,
+  type DisplayStatusKey,
+} from './account-utils';
+import { useAccountContentState } from './use-account-content-state';
+import { useAccountListState } from './use-account-list-state';
+import { type AccountDetailMeta, type AccountPanel, type AccountProps } from './account-types';
 
-type Panel = ResolvedAccountPanel;
+type Panel = AccountPanel;
 
-type Props = {
-  locale: string;
-  isAdmin: boolean;
-  initialPanel: Panel;
-  user: { id: string; email: string; name: string | null; image: string | null };
-  initialAdmin?: {
-    items: AdminTemplateRecord[];
-    total: number | null;
-    hasMore: boolean;
-    pendingCount: number;
-    promptsDailyTrend: DailyCountPoint[];
-  } | null;
-};
+type Props = AccountProps;
 
 function homeHref(locale: string) {
   return locale === 'en' ? '/' : `/${locale}`;
 }
 
-function formatJoinedAt(iso: string, locale: string): string {
-  const tag = locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : 'en-US';
-  return new Date(iso).toLocaleString(tag, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function formatReviewDate(iso: string, locale: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  const tag = locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : 'en-US';
-  return d.toLocaleDateString(tag, { month: '2-digit', day: '2-digit' });
-}
-
-function formatProviderLabels(providers: string[]): string {
-  return providers
-    .map((p) => (p === 'github' ? 'GitHub' : p === 'google' ? 'Google' : p))
-    .join(', ');
-}
-
-function trendDayLabel(date: string, locale: string): string {
-  const tag = locale === 'zh' ? 'zh-CN' : locale === 'ja' ? 'ja-JP' : 'en-US';
-  return new Date(`${date}T12:00:00.000Z`).toLocaleDateString(tag, {
-    month: 'numeric',
-    day: 'numeric',
-  });
-}
-
-function smoothTrendPath(coords: { x: number; y: number }[], tension = 0.35): string {
-  if (coords.length === 0) return '';
-  if (coords.length === 1) return `M ${coords[0].x} ${coords[0].y}`;
-  if (coords.length === 2) {
-    return `M ${coords[0].x} ${coords[0].y} L ${coords[1].x} ${coords[1].y}`;
-  }
-
-  let d = `M ${coords[0].x} ${coords[0].y}`;
-  for (let i = 0; i < coords.length - 1; i++) {
-    const p0 = coords[Math.max(i - 1, 0)];
-    const p1 = coords[i];
-    const p2 = coords[i + 1];
-    const p3 = coords[Math.min(i + 2, coords.length - 1)];
-    const cp1x = p1.x + (p2.x - p0.x) * tension;
-    const cp1y = p1.y + (p2.y - p0.y) * tension;
-    const cp2x = p2.x - (p3.x - p1.x) * tension;
-    const cp2y = p2.y - (p3.y - p1.y) * tension;
-    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
-  }
-  return d;
-}
-
-function parseAdminUserStats(raw: Record<string, unknown>): {
-  totalUsers: number;
-  activeToday: number;
-  newToday: number;
-  usersDailyTrend: DailyCountPoint[];
-} | null {
-  const s = (raw.stats ?? raw) as Record<string, unknown>;
-  const totalRaw = s.totalUsers;
-  if (totalRaw == null || totalRaw === '') return null;
-  const totalUsers = Number(totalRaw);
-  if (!Number.isFinite(totalUsers)) return null;
-
-  let usersDailyTrend: DailyCountPoint[] = [];
-  if (Array.isArray(s.usersDailyTrend)) {
-    usersDailyTrend = s.usersDailyTrend as DailyCountPoint[];
-  } else if (Array.isArray(s.dailyTrend)) {
-    usersDailyTrend = (s.dailyTrend as { date: string; newUsers?: number; count?: number }[]).map(
-      (p) => ({ date: p.date, count: Number(p.newUsers ?? p.count ?? 0) }),
-    );
-  }
-
-  return {
-    totalUsers,
-    activeToday: Number(s.activeToday ?? 0),
-    newToday: Number(s.newToday ?? 0),
-    usersDailyTrend,
-  };
-}
-
-
-type DisplayStatusKey = 'pub' | 'draft' | 'priv' | 'pending' | 'rejected';
-
-/** UI badge: review `status` + `visibility` (see resolveStatusForVisibility on create). */
-function displayStatus(item: TemplateRecord): DisplayStatusKey {
-  if (item.status === 'rejected') return 'rejected';
-  if (item.status === 'pending') return 'pending';
-  if (item.visibility === 'draft') return 'draft';
-  if (item.visibility === 'private') return 'priv';
-  return 'pub';
-}
-
 export default function PageComponent({ locale, isAdmin, initialPanel, user, initialAdmin }: Props) {
   const t = useTranslations('OpenPrompts.accountPage');
   const router = useRouter();
-  const adminLoadGen = useRef(0);
-  const adminItemsCountRef = useRef(initialAdmin?.items.length ?? 0);
-  const adminPrefetchedRef = useRef(Boolean(initialAdmin?.items.length));
-  const myTemplatesLoadGen = useRef(0);
-  const myTemplatesPrefetchRef = useRef<{ key: string; data: MyTemplatesPage } | null>(null);
+
+  const {
+    adminPage,
+    adminPageSize,
+    adminSearch,
+    adminStatusFilter,
+    adminTrendDays,
+    myPage,
+    myPageSize,
+    myStatusFilter,
+    search,
+    selectedAdminIds,
+    selectedMyIds,
+    setAdminPage,
+    setAdminPageSize,
+    setAdminSearch,
+    setAdminStatusFilter,
+    setAdminTrendDays,
+    setMyPage,
+    setMyPageSize,
+    setMyStatusFilter,
+    setSearch,
+    setSelectedAdminIds,
+    setSelectedMyIds,
+    setUsersPage,
+    setUsersPageSize,
+    setUsersSearch,
+    setUsersTrendDays,
+    usersPage,
+    usersPageSize,
+    usersSearch,
+    usersTrendDays,
+  } = useAccountListState();
 
   const [panel, setPanel] = useState<Panel>(initialPanel);
-  const [templates, setTemplates] = useState<TemplateRecord[]>([]);
-  const [adminItems, setAdminItems] = useState<AdminTemplateRecord[]>(initialAdmin?.items ?? []);
-  const [templateCount, setTemplateCount] = useState<number | null>(null);
-  const [myPendingCount, setMyPendingCount] = useState<number | null>(null);
-  const [adminPendingCount, setAdminPendingCount] = useState<number | null>(
-    initialAdmin?.pendingCount ?? null,
-  );
-  const [myLoading, setMyLoading] = useState(false);
-  const [myPage, setMyPage] = useState(1);
-  const [myPageSize, setMyPageSize] = useState(20);
-  const [myTotal, setMyTotal] = useState<number | null>(null);
-  const [myHasMore, setMyHasMore] = useState(false);
-  const [search, setSearch] = useState('');
-  const [adminSearch, setAdminSearch] = useState('');
-  const [myStatusFilter, setMyStatusFilter] = useState('');
-  const [adminStatusFilter, setAdminStatusFilter] = useState('');
-  const [adminPage, setAdminPage] = useState(1);
-  const [adminPageSize, setAdminPageSize] = useState(20);
-  const [adminTotal, setAdminTotal] = useState<number | null>(initialAdmin?.total ?? null);
-  const [adminHasMore, setAdminHasMore] = useState(initialAdmin?.hasMore ?? false);
-  const [adminLoading, setAdminLoading] = useState(false);
-  const [adminLoadError, setAdminLoadError] = useState<string | null>(null);
-  const [selectedAdminIds, setSelectedAdminIds] = useState<Set<number>>(() => new Set());
-  const [selectedMyIds, setSelectedMyIds] = useState<Set<number>>(() => new Set());
-  const [bulkReviewBusy, setBulkReviewBusy] = useState(false);
-  const [bulkMyDeleteBusy, setBulkMyDeleteBusy] = useState(false);
-  const [userItems, setUserItems] = useState<AdminUserSummary[]>([]);
-  const [usersSearch, setUsersSearch] = useState('');
-  const [usersPage, setUsersPage] = useState(1);
-  const [usersPageSize, setUsersPageSize] = useState(20);
-  const [usersTotal, setUsersTotal] = useState<number | null>(null);
-  const [usersPlatformTotal, setUsersPlatformTotal] = useState<number | null>(null);
-  const [usersActiveToday, setUsersActiveToday] = useState<number | null>(null);
-  const [usersNewToday, setUsersNewToday] = useState<number | null>(null);
-  const [usersDailyTrend, setUsersDailyTrend] = useState<DailyCountPoint[]>([]);
-  const [usersTrendDays, setUsersTrendDays] = useState<AdminUserTrendRange>(30);
-  const [adminPromptsDailyTrend, setAdminPromptsDailyTrend] = useState<DailyCountPoint[]>(
-    initialAdmin?.promptsDailyTrend ?? [],
-  );
-  const [adminTrendDays, setAdminTrendDays] = useState<AdminUserTrendRange>(30);
-  const [usersHasMore, setUsersHasMore] = useState(false);
-  const [usersLoading, setUsersLoading] = useState(false);
-  const [usersLoadError, setUsersLoadError] = useState<string | null>(null);
-  const [userDetailOpen, setUserDetailOpen] = useState(false);
-  const [userDetail, setUserDetail] = useState<AdminUserDetail | null>(null);
-  const [userDetailLoading, setUserDetailLoading] = useState(false);
-  const [userDetailError, setUserDetailError] = useState<string | null>(null);
-
-  const ADMIN_PAGE_SIZES = [10, 20, 50, 100] as const;
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailItem, setDetailItem] = useState<PromptDetailItem | null>(null);
   const [detailMeta, setDetailMeta] = useState<{
@@ -216,20 +85,82 @@ export default function PageComponent({ locale, isAdmin, initialPanel, user, ini
     source?: TemplateRecord | AdminTemplateRecord;
   } | null>(null);
 
+  const {
+    templates,
+    templateCount,
+    myPendingCount,
+    myLoading,
+    myTotal,
+    myHasMore,
+    adminItems,
+    adminPendingCount,
+    adminPromptsDailyTrend,
+    adminTotal,
+    adminHasMore,
+    adminLoading,
+    adminLoadError,
+    bulkReviewBusy,
+    bulkMyDeleteBusy,
+    userItems,
+    usersTotal,
+    usersPlatformTotal,
+    usersActiveToday,
+    usersNewToday,
+    usersDailyTrend,
+    usersHasMore,
+    usersLoading,
+    usersLoadError,
+    userDetailOpen,
+    userDetail,
+    userDetailLoading,
+    userDetailError,
+    loadStats,
+    loadMyTemplates,
+    loadAdminTemplates,
+    loadAdminUsers,
+    removeTemplate,
+    bulkDeleteMyTemplates,
+    review,
+    bulkReview,
+    openUserDetail,
+    closeUserDetail,
+  } = useAccountContentState({
+    locale,
+    isAdmin,
+    panel,
+    userEmail: user.email,
+    t,
+    initialAdmin,
+    search,
+    myStatusFilter,
+    myPage,
+    myPageSize,
+    adminSearch,
+    adminStatusFilter,
+    adminPage,
+    adminPageSize,
+    adminTrendDays,
+    usersSearch,
+    usersPage,
+    usersPageSize,
+    usersTrendDays,
+    selectedMyIds,
+    setSelectedMyIds,
+    selectedAdminIds,
+    setSelectedAdminIds,
+  });
+
+  const ADMIN_PAGE_SIZES = [10, 20, 50, 100] as const;
   const statusLabel = (key: DisplayStatusKey) => t(`status.${key}`);
 
   useEffect(() => {
-    adminItemsCountRef.current = adminItems.length;
-  }, [adminItems.length]);
+    setPanel(initialPanel);
+  }, [initialPanel]);
 
   const navigatePanel = (next: Panel) => {
     if (next === 'admin-denied') return;
     router.push(accountPanelHref(locale, next), { scroll: false });
   };
-
-  useEffect(() => {
-    setPanel(initialPanel);
-  }, [initialPanel]);
 
   const panelTitle = useMemo(() => {
     const map: Record<Panel, string> = {
@@ -243,284 +174,6 @@ export default function PageComponent({ locale, isAdmin, initialPanel, user, ini
     };
     return map[panel];
   }, [panel, t]);
-
-  const loadStats = useCallback(async () => {
-    try {
-      const res = await fetch(localeApiPath(locale, '/api/my/templates/stats'), { cache: 'no-store' });
-      if (!res.ok) {
-        setTemplateCount(null);
-        setMyPendingCount(null);
-        return;
-      }
-      const data = (await res.json()) as { templateCount?: number; pendingCount?: number };
-      setTemplateCount(typeof data.templateCount === 'number' ? data.templateCount : 0);
-      setMyPendingCount(typeof data.pendingCount === 'number' ? data.pendingCount : 0);
-    } catch {
-      setTemplateCount(null);
-      setMyPendingCount(null);
-    }
-  }, [locale]);
-
-  const prefetchMyTemplatesPage = useCallback(
-    async (page: number, gen: number) => {
-      const key = myTemplatesPageKey(search, myStatusFilter, page, myPageSize);
-      if (myTemplatesPrefetchRef.current?.key === key) return;
-      try {
-        const q = buildMyTemplatesQuery(search, myStatusFilter, page, myPageSize);
-        const res = await fetch(localeApiPath(locale, `/api/my/templates?${q}`), {
-          cache: 'no-store',
-        });
-        const data = (await res.json()) as {
-          items?: TemplateRecord[];
-          total?: number;
-          offset?: number;
-        };
-        if (gen !== myTemplatesLoadGen.current || !res.ok) return;
-        if (myTemplatesPrefetchRef.current?.key === key) return;
-        myTemplatesPrefetchRef.current = {
-          key,
-          data: parseMyTemplatesPage(data, page, myPageSize),
-        };
-      } catch {
-        /* optional prefetch */
-      }
-    },
-    [locale, search, myStatusFilter, myPageSize],
-  );
-
-  const loadMyTemplates = useCallback(async () => {
-    const pageKey = myTemplatesPageKey(search, myStatusFilter, myPage, myPageSize);
-    const cached = myTemplatesPrefetchRef.current;
-    if (cached?.key === pageKey) {
-      setTemplates(cached.data.items);
-      setMyTotal(cached.data.total);
-      setMyHasMore(cached.data.hasMore);
-      myTemplatesPrefetchRef.current = null;
-      if (cached.data.hasMore) {
-        void prefetchMyTemplatesPage(myPage + 1, myTemplatesLoadGen.current);
-      }
-      return;
-    }
-
-    const gen = ++myTemplatesLoadGen.current;
-    setMyLoading(true);
-    try {
-      const q = buildMyTemplatesQuery(search, myStatusFilter, myPage, myPageSize);
-      const res = await fetch(localeApiPath(locale, `/api/my/templates?${q}`), { cache: 'no-store' });
-      const data = (await res.json()) as {
-        items?: TemplateRecord[];
-        total?: number;
-        offset?: number;
-      };
-      if (gen !== myTemplatesLoadGen.current) return;
-      if (res.ok) {
-        const page = parseMyTemplatesPage(data, myPage, myPageSize);
-        setTemplates(page.items);
-        setMyTotal(page.total);
-        setMyHasMore(page.hasMore);
-        if (page.hasMore) void prefetchMyTemplatesPage(myPage + 1, gen);
-      } else {
-        setTemplates([]);
-        setMyTotal(null);
-        setMyHasMore(false);
-      }
-    } catch {
-      if (gen !== myTemplatesLoadGen.current) return;
-      setTemplates([]);
-      setMyTotal(null);
-      setMyHasMore(false);
-    } finally {
-      if (gen === myTemplatesLoadGen.current) setMyLoading(false);
-    }
-  }, [locale, search, myStatusFilter, myPage, myPageSize, prefetchMyTemplatesPage]);
-
-  const loadAdminTemplates = useCallback(async () => {
-    const gen = ++adminLoadGen.current;
-    setAdminLoading(true);
-    setAdminLoadError(null);
-
-    const ac = new AbortController();
-    const timeoutId = window.setTimeout(() => ac.abort(), 60_000);
-
-    try {
-      const q = new URLSearchParams();
-      if (adminSearch.trim()) q.set('q', adminSearch.trim());
-      if (adminStatusFilter) q.set('status', adminStatusFilter);
-      q.set('limit', String(adminPageSize));
-      q.set('offset', String((adminPage - 1) * adminPageSize));
-      q.set('trendDays', String(adminTrendDays));
-      const res = await fetch(localeApiPath(locale, `/api/admin/templates?${q}`), {
-        cache: 'no-store',
-        signal: ac.signal,
-      });
-      const data = (await res.json()) as {
-        items?: AdminTemplateRecord[];
-        total?: number | null;
-        hasMore?: boolean;
-        pendingCount?: number;
-        promptsDailyTrend?: DailyCountPoint[];
-        error?: string;
-      };
-      if (gen !== adminLoadGen.current) return;
-      if (res.ok) {
-        setAdminItems(data.items ?? []);
-        setAdminTotal(typeof data.total === 'number' ? data.total : null);
-        setAdminHasMore(Boolean(data.hasMore));
-        if (typeof data.pendingCount === 'number') setAdminPendingCount(data.pendingCount);
-        setAdminPromptsDailyTrend(
-          Array.isArray(data.promptsDailyTrend) ? data.promptsDailyTrend : [],
-        );
-      } else {
-        if (res.status === 403) {
-          setAdminLoadError(t('admin.forbiddenBody', { email: user.email || '—' }));
-        } else {
-          setAdminLoadError(data.error ?? `HTTP ${res.status}`);
-        }
-        if (!adminItemsCountRef.current) {
-          setAdminItems([]);
-          setAdminTotal(null);
-          setAdminHasMore(false);
-          setAdminPromptsDailyTrend([]);
-        }
-      }
-    } catch (e: unknown) {
-      if (gen !== adminLoadGen.current) return;
-      if (e instanceof DOMException && e.name === 'AbortError') {
-        if (!adminItemsCountRef.current) {
-          setAdminLoadError(t('admin.loadTimeout'));
-        }
-        return;
-      }
-      const msg = e instanceof Error ? e.message : 'Network error';
-      setAdminLoadError(msg);
-      if (!adminItemsCountRef.current) {
-        setAdminItems([]);
-        setAdminTotal(null);
-        setAdminHasMore(false);
-        setAdminPromptsDailyTrend([]);
-      }
-    } finally {
-      window.clearTimeout(timeoutId);
-      if (gen === adminLoadGen.current) setAdminLoading(false);
-    }
-  }, [locale, adminSearch, adminStatusFilter, adminPage, adminPageSize, adminTrendDays, user.email]);
-
-  const loadAdminUsers = useCallback(async () => {
-    setUsersLoading(true);
-    setUsersLoadError(null);
-
-    const ac = new AbortController();
-    const timeoutId = window.setTimeout(() => ac.abort(), 25_000);
-
-    try {
-      const q = new URLSearchParams();
-      if (usersSearch.trim()) q.set('q', usersSearch.trim());
-      q.set('limit', String(usersPageSize));
-      q.set('offset', String((usersPage - 1) * usersPageSize));
-      q.set('trendDays', String(usersTrendDays));
-      const res = await fetch(localeApiPath(locale, `/api/admin/users?${q}`), {
-        cache: 'no-store',
-        signal: ac.signal,
-      });
-      const data = (await res.json()) as Record<string, unknown> & {
-        items?: AdminUserSummary[];
-        total?: number;
-        hasMore?: boolean;
-        error?: string;
-      };
-      if (res.ok) {
-        setUserItems(data.items ?? []);
-        setUsersTotal(typeof data.total === 'number' ? data.total : null);
-        setUsersHasMore(Boolean(data.hasMore));
-        const parsedStats = parseAdminUserStats(data);
-        if (parsedStats) {
-          setUsersPlatformTotal(parsedStats.totalUsers);
-          setUsersActiveToday(parsedStats.activeToday);
-          setUsersNewToday(parsedStats.newToday);
-          setUsersDailyTrend(parsedStats.usersDailyTrend);
-        }
-      } else {
-        setUserItems([]);
-        setUsersTotal(null);
-        setUsersPlatformTotal(null);
-        setUsersActiveToday(null);
-        setUsersNewToday(null);
-        setUsersDailyTrend([]);
-        setUsersHasMore(false);
-        setUsersLoadError(data.error ?? `HTTP ${res.status}`);
-      }
-    } catch (e: unknown) {
-      setUserItems([]);
-      setUsersTotal(null);
-      setUsersPlatformTotal(null);
-      setUsersActiveToday(null);
-      setUsersNewToday(null);
-      setUsersDailyTrend([]);
-      setUsersHasMore(false);
-      const msg = e instanceof Error ? e.message : 'Network error';
-      setUsersLoadError(
-        e instanceof DOMException && e.name === 'AbortError' ? t('adminUsers.loadTimeout') : msg,
-      );
-    } finally {
-      window.clearTimeout(timeoutId);
-      setUsersLoading(false);
-    }
-  }, [locale, usersSearch, usersPage, usersPageSize, usersTrendDays, t]);
-
-  useEffect(() => {
-    setAdminPage(1);
-  }, [adminSearch, adminStatusFilter, adminPageSize, adminTrendDays]);
-
-  useEffect(() => {
-    setMyPage(1);
-    myTemplatesPrefetchRef.current = null;
-  }, [search, myStatusFilter, myPageSize]);
-
-  useEffect(() => {
-    setUsersPage(1);
-  }, [usersSearch, usersPageSize, usersTrendDays]);
-
-  useEffect(() => {
-    if (panel === 'overview') void loadStats();
-  }, [panel, loadStats]);
-
-  useEffect(() => {
-    if (!isAdmin) return;
-    void (async () => {
-      try {
-        const res = await fetch(localeApiPath(locale, '/api/admin/templates?limit=1'), { cache: 'no-store' });
-        const data = (await res.json()) as { pendingCount?: number };
-        if (res.ok && typeof data.pendingCount === 'number') setAdminPendingCount(data.pendingCount);
-      } catch {
-        /* optional nav badge */
-      }
-    })();
-  }, [isAdmin, locale]);
-
-  useEffect(() => {
-    if (panel === 'prompts') void loadMyTemplates();
-  }, [panel, loadMyTemplates]);
-
-  useEffect(() => {
-    if (panel !== 'admin' || !isAdmin) return;
-    if (adminPrefetchedRef.current) {
-      adminPrefetchedRef.current = false;
-      return;
-    }
-    void loadAdminTemplates();
-  }, [panel, isAdmin, loadAdminTemplates]);
-
-  useEffect(() => {
-    setSelectedAdminIds(new Set());
-  }, [adminPage, adminPageSize, adminStatusFilter, adminSearch]);
-
-  useEffect(() => {
-    setSelectedMyIds(new Set());
-  }, [myPage, myPageSize, myStatusFilter, search]);
-
-  useEffect(() => {
-    if (panel === 'users' && isAdmin) void loadAdminUsers();
-  }, [panel, isAdmin, loadAdminUsers]);
 
   const openEdit = (item: TemplateRecord) => {
     router.push(submitEditorHref(locale, { editId: item.id }));
@@ -548,82 +201,6 @@ export default function PageComponent({ locale, isAdmin, initialPanel, user, ini
     setDetailOpen(false);
     setDetailItem(null);
     setDetailMeta(null);
-  };
-
-  const removeTemplate = async (id: number) => {
-    if (!window.confirm(t('table.confirmDelete'))) return;
-    await fetch(localeApiPath(locale, `/api/my/templates/${id}`), { method: 'DELETE' });
-    setSelectedMyIds((prev) => {
-      if (!prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-    myTemplatesPrefetchRef.current = null;
-    void loadMyTemplates();
-    void loadStats();
-  };
-
-  const bulkDeleteMyTemplates = async () => {
-    const ids = Array.from(selectedMyIds);
-    if (!ids.length) return;
-    if (!window.confirm(t('table.bulkConfirmDelete', { count: ids.length }))) return;
-
-    setBulkMyDeleteBusy(true);
-    try {
-      const res = await fetch(localeApiPath(locale, '/api/my/templates/bulk'), {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
-      });
-      if (res.ok) {
-        setSelectedMyIds(new Set());
-        myTemplatesPrefetchRef.current = null;
-        void loadMyTemplates();
-        void loadStats();
-      }
-    } finally {
-      setBulkMyDeleteBusy(false);
-    }
-  };
-
-  const review = async (id: number, status: 'approved' | 'rejected') => {
-    await fetch(localeApiPath(locale, `/api/admin/templates/${id}`), {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    setSelectedAdminIds((prev) => {
-      if (!prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-    void loadAdminTemplates();
-    void loadStats();
-  };
-
-  const bulkReview = async (status: 'approved' | 'rejected') => {
-    const ids = Array.from(selectedAdminIds);
-    if (!ids.length) return;
-    const confirmKey = status === 'approved' ? 'admin.bulkConfirmApprove' : 'admin.bulkConfirmReject';
-    if (!window.confirm(t(confirmKey, { count: ids.length }))) return;
-
-    setBulkReviewBusy(true);
-    try {
-      const res = await fetch(localeApiPath(locale, '/api/admin/templates/bulk'), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, status }),
-      });
-      if (res.ok) {
-        setSelectedAdminIds(new Set());
-        void loadAdminTemplates();
-        void loadStats();
-      }
-    } finally {
-      setBulkReviewBusy(false);
-    }
   };
 
   const toggleAdminSelection = (id: number) => {
@@ -674,34 +251,6 @@ export default function PageComponent({ locale, isAdmin, initialPanel, user, ini
 
   const adminTotalPages =
     adminTotal != null && adminTotal >= 0 ? Math.max(1, Math.ceil(adminTotal / adminPageSize)) : null;
-
-  const openUserDetail = async (summary: AdminUserSummary) => {
-    setUserDetailOpen(true);
-    setUserDetail(null);
-    setUserDetailError(null);
-    setUserDetailLoading(true);
-    try {
-      const res = await fetch(localeApiPath(locale, `/api/admin/users/${summary.id}`), {
-        cache: 'no-store',
-      });
-      const data = (await res.json()) as { item?: AdminUserDetail; error?: string };
-      if (res.ok && data.item) {
-        setUserDetail(data.item);
-      } else {
-        setUserDetailError(data.error ?? `HTTP ${res.status}`);
-      }
-    } catch (e: unknown) {
-      setUserDetailError(e instanceof Error ? e.message : 'Network error');
-    } finally {
-      setUserDetailLoading(false);
-    }
-  };
-
-  const closeUserDetail = () => {
-    setUserDetailOpen(false);
-    setUserDetail(null);
-    setUserDetailError(null);
-  };
 
   const renderPagination = (opts: {
     page: number;

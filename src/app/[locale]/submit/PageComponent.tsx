@@ -7,17 +7,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import {
-  modelLabelToId,
-  type PromptVisibility,
-  type TemplateRecord,
-} from '~/lib/prompts/template-types';
-import { MAX_TITLE } from '~/lib/prompts/template-limits';
+import type { PromptVisibility, TemplateRecord } from '~/lib/prompts/template-types';
 import {
   getSubmitCategoryTags,
   isSubmitCategoryKey,
-  normalizeSubmitCategoryKey,
-  resolvePromptCategory,
   type SubmitCategoryKey,
 } from '~/lib/prompts/prompt-categories';
 import { PromptCategoryStrip } from '~/components/prompt-gallery/PromptCategoryStrip';
@@ -25,31 +18,16 @@ import { formatSubTagLabel } from '~/lib/prompts/sub-tag-i18n';
 import { parseSubmitEditId, submitEditorHref } from '~/lib/prompts/submit-editor-path';
 import { OpenPromptsSiteFooter } from '~/components/open-prompts/OpenPromptsSiteFooter';
 import { OpenPromptsSiteHeader } from '~/components/open-prompts/OpenPromptsSiteHeader';
-import { localeApiPath } from '~/lib/locale-api-path';
 import { accountPanelHref } from '~/lib/account/account-path';
 import { parseXStatusUrl } from '~/lib/x-import/parse-x-status-url';
 import { authorHandleFromXUrl, resolveXAuthorHandle } from '~/lib/x-import/x-author-handle';
 import type { XSourceDuplicate } from '~/lib/x-import/x-source-duplicate';
 import { SubmitPreviewImageStrip } from './SubmitPreviewImageStrip';
 import { SubmitLanding } from './SubmitLanding';
-
-
-const MAX_RESULT_IMAGES = 8;
-
-function isValidImageSrc(value: string): boolean {
-  const v = value.trim();
-  return /^https?:\/\//i.test(v) || v.startsWith('data:');
-}
-
-const MODEL_IDS = ['gptImage2', 'midjourney', 'dalle3', 'flux', 'sd', 'ideogram'] as const;
-const MODEL_EMOJI: Record<(typeof MODEL_IDS)[number], string> = {
-  gptImage2: '🤖',
-  midjourney: '🎨',
-  dalle3: '✦',
-  flux: '⚡',
-  sd: '🌊',
-  ideogram: '💎',
-};
+import { checkXSourceDuplicate, importTemplateFromX, loadTemplateForEdit, saveSubmittedTemplate } from './submit-api';
+import { MAX_RESULT_IMAGES, MAX_TITLE, MODEL_EMOJI, MODEL_IDS } from './submit-types';
+import { buildSubmitPayload, isValidImageSrc, readFileAsDataUrl, templateToSubmitFormValues } from './submit-utils';
+import { useSubmitFormState } from './use-submit-form-state';
 
 export type SubmitPageProps = {
   locale: string;
@@ -83,7 +61,46 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
   const isPrivateMode = !isEditMode && visibilityParam === 'private';
   const isChooserMode = !isEditMode && !isPublicMode && !isPrivateMode;
 
-  const [templateVisibility, setTemplateVisibility] = useState<PromptVisibility>('public');
+  const {
+    templateVisibility,
+    title,
+    setTitle,
+    desc,
+    setDesc,
+    modelId,
+    setModelId,
+    prompt,
+    setPrompt,
+    category,
+    setCategory,
+    tags,
+    tagInput,
+    setTagInput,
+    resultImages,
+    previewImageUrls,
+    imagesFull,
+    urlDraft,
+    setUrlDraft,
+    urlError,
+    setUrlError,
+    uploadDrag,
+    setUploadDrag,
+    xImportUrl,
+    setXImportUrl,
+    authorHandle,
+    setAuthorHandle,
+    success,
+    submissionId,
+    applyTemplateValues,
+    applyXImportValues,
+    markSubmitted,
+    addTag,
+    removeTag,
+    addImageUrl: addImageUrlToState,
+    appendImages,
+    removeImage,
+    resetCreateForm,
+  } = useSubmitFormState();
   const [loadingTemplate, setLoadingTemplate] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -93,25 +110,10 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
       ? 'private'
       : 'public';
 
-  const [title, setTitle] = useState('');
-  const [desc, setDesc] = useState('');
-  const [modelId, setModelId] = useState<(typeof MODEL_IDS)[number]>('gptImage2');
-  const [prompt, setPrompt] = useState('');
-  const [category, setCategory] = useState<SubmitCategoryKey | ''>('');
-  const [tags, setTags] = useState<string[]>(['Cinematic', 'Portrait']);
-  const [tagInput, setTagInput] = useState('');
-  const [resultImages, setResultImages] = useState<string[]>([]);
-  const [urlDraft, setUrlDraft] = useState('');
-  const [urlError, setUrlError] = useState<string | null>(null);
-  const [uploadDrag, setUploadDrag] = useState(false);
-  const [xImportUrl, setXImportUrl] = useState('');
-  const [authorHandle, setAuthorHandle] = useState('');
   const [xImportBusy, setXImportBusy] = useState(false);
   const [xImportError, setXImportError] = useState<string | null>(null);
   const [xImportOk, setXImportOk] = useState(false);
   const [xDuplicate, setXDuplicate] = useState<XSourceDuplicate | null>(null);
-  const [success, setSuccess] = useState(false);
-  const [submissionId, setSubmissionId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [shakeId, setShakeId] = useState<string | null>(null);
   const [blockedHint, setBlockedHint] = useState<string | null>(null);
@@ -137,15 +139,9 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
     if (fromUrl) setAuthorHandle(fromUrl);
     const ac = new AbortController();
     const timer = window.setTimeout(() => {
-      const q = new URLSearchParams({ url: u });
-      if (isEditMode && editId) q.set('excludeId', String(editId));
-      void fetch(localeApiPath(locale, `/api/x-import/check?${q}`), {
-        cache: 'no-store',
-        signal: ac.signal,
-      })
-        .then(async (res) => {
-          const data = (await res.json()) as { duplicate?: XSourceDuplicate | null };
-          if (res.ok) setXDuplicate(data.duplicate ?? null);
+      void checkXSourceDuplicate({ locale, url: u, editId })
+        .then((result) => {
+          if (!ac.signal.aborted && result.ok) setXDuplicate(result.duplicate);
         })
         .catch(() => {
           /* debounced check — ignore abort */
@@ -201,35 +197,24 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
     router.replace(loginHref(locale, authReturnPath));
   }, [isPrivateMode, isEditMode, authStatus, locale, router, authReturnPath]);
 
-  const applyTemplateToForm = useCallback((item: TemplateRecord) => {
-    const cat = resolvePromptCategory(item.category, item.tags) ?? '';
-    setTitle(item.title);
-    setDesc(item.description);
-    setPrompt(item.prompt);
-    setModelId(modelLabelToId(item.model) as (typeof MODEL_IDS)[number]);
-    setCategory(cat);
-    setTags(
-      item.tags.filter((tag) => !normalizeSubmitCategoryKey(tag)),
-    );
-    setResultImages(item.images.filter(isValidImageSrc).slice(0, MAX_RESULT_IMAGES));
-    setXImportUrl(item.sourceUrl ?? '');
-    setAuthorHandle(item.authorHandle ?? '');
-    setTemplateVisibility(item.visibility);
-    setSubmissionId(String(item.id));
-  }, []);
+  const applyTemplateToForm = useCallback(
+    (item: TemplateRecord) => {
+      applyTemplateValues(templateToSubmitFormValues(item));
+    },
+    [applyTemplateValues],
+  );
 
   const loadEditTemplate = useCallback(async () => {
     if (!editId) return;
     setLoadingTemplate(true);
     setLoadError(null);
     try {
-      const res = await fetch(localeApiPath(locale, `/api/my/templates/${editId}`), { cache: 'no-store' });
-      const data = (await res.json().catch(() => ({}))) as { item?: TemplateRecord; error?: string };
-      if (!res.ok || !data.item) {
-        setLoadError(data.error ?? `HTTP ${res.status}`);
+      const result = await loadTemplateForEdit(locale, editId);
+      if (!result.ok || !result.data.item) {
+        setLoadError(result.data.error ?? `HTTP ${result.status}`);
         return;
       }
-      applyTemplateToForm(data.item);
+      applyTemplateToForm(result.data.item);
     } catch {
       setLoadError(t('editMode.loadFailed'));
     } finally {
@@ -270,8 +255,7 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
   };
 
   const handleCategorySubTagPick = (tag: string) => {
-    if (tags.includes(tag) || tags.length >= 8) return;
-    setTags((prev) => [...prev, tag]);
+    addTag(tag);
   };
 
   const categoryLabelFor =
@@ -279,9 +263,6 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
       ? t(`categories.${category}`)
       : '';
   const tagsOk = tags.length >= 2 && tags.length <= 8;
-
-  const previewImageUrls = useMemo(() => resultImages.slice(0, MAX_RESULT_IMAGES), [resultImages]);
-  const imagesFull = resultImages.length >= MAX_RESULT_IMAGES;
 
   const validateForm = () => {
     if (!title.trim()) {
@@ -312,28 +293,12 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
     return true;
   };
 
-  const addTag = (raw: string) => {
-    const val = raw.replace(',', '').trim();
-    if (!val || tags.includes(val) || tags.length >= 8) return;
-    setTags((prev) => [...prev, val]);
-  };
-
-  const removeTag = (tag: string) => setTags((prev) => prev.filter((x) => x !== tag));
-
   const onTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter' && e.key !== ',') return;
     e.preventDefault();
     addTag(tagInput);
     setTagInput('');
   };
-
-  const readFileAsDataUrl = (file: File) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ''));
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
 
   const handleFiles = (files: FileList | null) => {
     if (!files?.length) return;
@@ -350,18 +315,9 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
         }
       }
       if (dataUrls.length === 0) return;
-      setResultImages((cur) => {
-        const room = MAX_RESULT_IMAGES - cur.length;
-        if (room <= 0) return cur;
-        return [...cur, ...dataUrls.slice(0, room)];
-      });
+      appendImages(dataUrls);
     })();
     setUploadDrag(false);
-  };
-
-  const removeImage = (index: number) => {
-    setResultImages((prev) => prev.filter((_, idx) => idx !== index));
-    setUrlError(null);
   };
 
   const addImageUrl = useCallback(() => {
@@ -379,10 +335,10 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
       setUrlError(t('validation.duplicateImageUrl'));
       return;
     }
-    setResultImages((prev) => [...prev, raw].slice(0, MAX_RESULT_IMAGES));
+    addImageUrlToState(raw);
     setUrlDraft('');
     setUrlError(null);
-  }, [imagesFull, resultImages, t, urlDraft]);
+  }, [addImageUrlToState, imagesFull, resultImages, setUrlDraft, setUrlError, t, urlDraft]);
 
   const onUrlKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') return;
@@ -403,46 +359,30 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
     if (preHandle) setAuthorHandle(preHandle);
     setXImportBusy(true);
     try {
-      const res = await fetch(localeApiPath(locale, '/api/x-import'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: u }),
-      });
-      const data = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        error?: string;
-        duplicate?: XSourceDuplicate;
-        title?: string;
-        description?: string;
-        prompt?: string;
-        imageUrls?: string[];
-        sourceUrl?: string;
-        authorHandle?: string;
-      };
-      if (res.status === 409 && data.error === 'duplicate_x_source' && data.duplicate) {
+      const result = await importTemplateFromX(locale, u);
+      const data = result.data;
+      if (result.status === 409 && data.error === 'duplicate_x_source' && data.duplicate) {
         setXDuplicate(data.duplicate);
         setXImportError(t('xImport.errorDuplicate'));
         return;
       }
-      if (!res.ok) {
+      if (!result.ok) {
         setXImportError(data.error || t('xImport.errorGeneric'));
         return;
       }
-      if (typeof data.title === 'string') setTitle(data.title.slice(0, MAX_TITLE));
-      if (typeof data.description === 'string') setDesc(data.description.slice(0, 120));
-      if (typeof data.prompt === 'string') setPrompt(data.prompt);
-      if (Array.isArray(data.imageUrls) && data.imageUrls.length > 0) {
-        const imported = data.imageUrls.filter(isValidImageSrc).slice(0, MAX_RESULT_IMAGES);
-        if (imported.length > 0) setResultImages(imported);
-      }
-      if (typeof data.sourceUrl === 'string' && data.sourceUrl.trim()) setXImportUrl(data.sourceUrl.trim());
-      setAuthorHandle(
-        resolveXAuthorHandle({
-          sourceUrl: typeof data.sourceUrl === 'string' ? data.sourceUrl : u,
-          screenName:
-            typeof data.authorHandle === 'string' ? data.authorHandle.replace(/^@+/, '') : null,
-        }) || preHandle || '',
-      );
+      applyXImportValues({
+        title: typeof data.title === 'string' ? data.title.slice(0, MAX_TITLE) : undefined,
+        description: typeof data.description === 'string' ? data.description.slice(0, 120) : undefined,
+        prompt: typeof data.prompt === 'string' ? data.prompt : undefined,
+        images: Array.isArray(data.imageUrls) ? data.imageUrls : undefined,
+        sourceUrl: typeof data.sourceUrl === 'string' ? data.sourceUrl : undefined,
+        authorHandle:
+          resolveXAuthorHandle({
+            sourceUrl: typeof data.sourceUrl === 'string' ? data.sourceUrl : u,
+            screenName:
+              typeof data.authorHandle === 'string' ? data.authorHandle.replace(/^@+/, '') : null,
+          }) || preHandle || '',
+      });
       setXDuplicate(null);
       setXImportOk(true);
     } catch {
@@ -450,7 +390,7 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
     } finally {
       setXImportBusy(false);
     }
-  }, [locale, t, xImportUrl]);
+  }, [applyXImportValues, locale, setAuthorHandle, t, xImportUrl]);
 
   const copyPrompt = () => {
     if (!prompt) return;
@@ -470,59 +410,46 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
     if (!validateForm()) return;
     setBlockedHint(null);
     setSubmitting(true);
-    const payload = {
-      title: title.trim(),
-      description: desc.trim(),
-      prompt: prompt.trim(),
+    const payload = buildSubmitPayload({
+      title,
+      description: desc,
+      prompt,
       modelId,
       category,
       tags,
       images: previewImageUrls,
-      sourceUrl: xImportUrl.trim() || undefined,
-      authorHandle: authorHandle.trim() || undefined,
+      sourceUrl: xImportUrl,
+      authorHandle,
       visibility: saveVisibility,
-    };
+    });
     try {
-      const submitPath =
-        isEditMode && editId
-          ? localeApiPath(locale, `/api/my/templates/${editId}`)
-          : authStatus === 'authenticated'
-            ? localeApiPath(locale, '/api/my/templates')
-            : localeApiPath(locale, '/api/prompts');
-      const res = await fetch(submitPath, {
-        method: isEditMode ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+      const result = await saveSubmittedTemplate({
+        locale,
+        editId,
+        isAuthenticated: authStatus === 'authenticated',
+        payload,
       });
-      const data = (await res.json().catch(() => ({}))) as {
-        ok?: boolean;
-        id?: number;
-        item?: TemplateRecord;
-        error?: string;
-        duplicate?: XSourceDuplicate;
-      };
-      if (!res.ok) {
-        if (res.status === 401 && (isPrivateMode || isEditMode)) {
+      const data = result.data;
+      if (!result.ok) {
+        if (result.status === 401 && (isPrivateMode || isEditMode)) {
           router.replace(loginHref(locale, authReturnPath));
           return;
         }
-        if (res.status === 409 && data.error === 'duplicate_x_source' && data.duplicate) {
+        if (result.status === 409 && data.error === 'duplicate_x_source' && data.duplicate) {
           setXDuplicate(data.duplicate);
           setBlockedHint(
             t('xImport.duplicateSubmitBlocked', { title: data.duplicate.title }),
           );
           return;
         }
-        if (res.status === 503) {
+        if (result.status === 503) {
           setBlockedHint(t('validation.submitUnavailable'));
         } else {
           setBlockedHint(typeof data.error === 'string' ? data.error : t('validation.submitFailed'));
         }
         return;
       }
-      setSuccess(true);
-      const id = data.item?.id ?? data.id ?? editId;
-      if (id) setSubmissionId(String(id));
+      markSubmitted(data.item?.id ?? data.id ?? editId);
     } catch {
       setBlockedHint(t('validation.submitFailed'));
     } finally {
@@ -531,24 +458,12 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
   };
 
   const resetForm = () => {
-    setSuccess(false);
     setBlockedHint(null);
     if (isEditMode) {
       void loadEditTemplate();
       return;
     }
-    setTitle('');
-    setDesc('');
-    setModelId('gptImage2');
-    setPrompt('');
-    setCategory('');
-    setTags(['Cinematic', 'Portrait']);
-    setTagInput('');
-    setResultImages([]);
-    setUrlDraft('');
-    setUrlError(null);
-    setXImportUrl('');
-    setAuthorHandle('');
+    resetCreateForm();
     setXImportError(null);
     setXImportOk(false);
   };
@@ -815,10 +730,7 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
                             key={tag}
                             type="button"
                             className="op-sp-sugg"
-                            onClick={() => {
-                              if (tags.includes(tag) || tags.length >= 8) return;
-                              setTags((p) => [...p, tag]);
-                            }}
+                            onClick={() => addTag(tag)}
                           >
                             {tag}
                           </button>

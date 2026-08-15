@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import type { PromptGalleryItem } from '~/data/promptGallery';
 import { PROMPT_TEMPLATES } from '~/data/promptTemplates';
 import { renderPromptTemplate, TemplateValidationError } from '~/lib/templates/render';
+import { BYOK_PROVIDER_NAMES } from '~/lib/generation/provider-names';
 import { PROVIDER_CAPABILITIES } from '~/lib/generation/capabilities';
-import {useTranslations} from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { getOrCreateUserId } from '~/lib/credits/fingerprint';
 import { localeApiPath } from '~/lib/locale-api-path';
 
@@ -29,7 +30,7 @@ export function GenerateModal({ open, onClose, locale, item }: Props) {
   const [rendered, setRendered] = useState<{ prompt: string; negativePrompt?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [provider, setProvider] = useState<string>('atlascloud');
+  const [provider, setProvider] = useState<string>(BYOK_PROVIDER_NAMES[0]);
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
   const [quality, setQuality] = useState<string>('1k');
   const [count, setCount] = useState<number>(1);
@@ -203,8 +204,11 @@ export function GenerateModal({ open, onClose, locale, item }: Props) {
                   value={provider}
                   onChange={(e) => setProvider(e.target.value)}
                 >
-                  <option value="atlascloud">atlascloud</option>
-                  <option value="replicate">replicate</option>
+                  {BYOK_PROVIDER_NAMES.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>

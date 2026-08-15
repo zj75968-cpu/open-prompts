@@ -9,59 +9,18 @@ import { PromptGalleryCard } from '~/components/prompt-gallery/PromptGalleryCard
 import { PromptGallerySwipeViewer } from '~/components/prompt-gallery/PromptGallerySwipeViewer';
 import { OpenPromptsSiteFooter } from '~/components/open-prompts/OpenPromptsSiteFooter';
 import { OpenPromptsSiteHeader } from '~/components/open-prompts/OpenPromptsSiteHeader';
-import { PROVIDER_CAPABILITIES } from '~/lib/generation/capabilities';
+import { PROVIDER_CAPABILITIES, type ProviderCapabilities } from '~/lib/generation/capabilities';
 import { HiDotsHorizontal } from 'react-icons/hi';
 import { LuCheck, LuChevronDown, LuHash, LuLayers, LuMaximize2, LuShield, LuSquare } from 'react-icons/lu';
 import { FaCubes } from 'react-icons/fa';
 import { TbCloud } from 'react-icons/tb';
-import { getOrCreateUserId } from '~/lib/credits/fingerprint';
-import { localeApiPath } from '~/lib/locale-api-path';
+import { downloadImageWithRandomName, pickClosestAspectRatio, proxifyImageList, proxifyImageUrl } from './create-utils';
+import type { CreateHeroBlock, InternalConfigCopy, SwipeViewerState } from './types';
+import { useGenerationHistory } from './use-generation-history';
+import { useGenerationJob } from './use-generation-job';
+import { useProviderApiKeys } from './use-provider-api-keys';
 
 type Props = { locale: string; prompts: PromptGalleryItem[] };
-
-type SwipeViewerState = {
-  images: string[];
-  initialIndex: number;
-  title: string;
-  imageKeyPrefix: string;
-  showDownload: boolean;
-};
-type UiState = 'idle' | 'queued' | 'running' | 'succeeded' | 'failed';
-type CreateHeroBlock = {
-  /** Full headline for reference / accessibility */
-  title: string;
-  titleLine1: string;
-  titleLine2Before: string;
-  titleLine2Em: string;
-  titleLine2After: string;
-  subtitle: string;
-  featuresTitle: string;
-  features: { t: string; d: string }[];
-  howTitle: string;
-  howSteps: string[];
-  whyTitle: string;
-  whyPoints: string[];
-  sayTitle: string;
-  says: { q: string; a: string }[];
-  faqTitle: string;
-  faqs: { q: string; a: string }[];
-  ctaTitle: string;
-  ctaSubtitle: string;
-  ctaButton: string;
-};
-type InternalConfigCopy = { title: string; body: string; steps: string[] };
-type HistoryEntry = {
-  id: string;
-  createdAt: number;
-  providerJobId: string | null;
-  prompt: string;
-  model: string;
-  provider: string;
-  aspectRatio: string;
-  quality: string;
-  count: number;
-  images: string[];
-};
 
 export default function PageComponent({ locale, prompts }: Props) {
   const t = useTranslations('OpenPrompts');
@@ -107,7 +66,6 @@ export default function PageComponent({ locale, prompts }: Props) {
   }, [prompts]);
 
   const [promptText, setPromptText] = useState('');
-  const [error, setError] = useState<string | null>(null);
 
   const [provider, setProvider] = useState<string>('internal');
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
@@ -115,8 +73,7 @@ export default function PageComponent({ locale, prompts }: Props) {
   const [model, setModel] = useState<string>('');
   const [quality, setQuality] = useState<string>('1k');
   const [count, setCount] = useState<number>(1);
-  const [apiKeyByProvider, setApiKeyByProvider] = useState<Record<string, string>>({});
-  const apiKeyByProviderRef = useRef<Record<string, string>>({});
+  const { getApiKeyOverride, saveApiKeyOverride, clearApiKeyOverride } = useProviderApiKeys();
   const prevProviderRef = useRef<string>(provider);
   /** null = closed; non-null = open at fixed viewport position */
   const [moreMenu, setMoreMenu] = useState<{ top: number; left: number } | null>(null);
@@ -131,17 +88,20 @@ export default function PageComponent({ locale, prompts }: Props) {
       return PROVIDER_CAPABILITIES[provider] || PROVIDER_CAPABILITIES.atlascloud;
     }
     const all = Object.values(PROVIDER_CAPABILITIES);
-    const aspectRatios = Array.from(new Set(all.flatMap((c: any) => c.aspectRatios || [])));
-    const qualities = Array.from(new Set(all.flatMap((c: any) => c.qualities || [])));
-    const maxCount = Math.max(1, ...all.map((c: any) => Number(c.maxCount || 1)));
+    const aspectRatios = Array.from(new Set(all.flatMap((capability) => capability.aspectRatios || [])));
+    const qualities = Array.from(new Set(all.flatMap((capability) => capability.qualities || [])));
+    const maxCount = Math.max(1, ...all.map((capability) => Number(capability.maxCount || 1)));
     const models = Array.from(
       new Map(
         all
-          .flatMap((c: any) => (Array.isArray(c.models) ? c.models : []))
-          .map((m: any) => [String(m?.value ?? m?.label ?? ''), { label: String(m?.label ?? ''), value: m?.value }])
+          .flatMap((capability) => (Array.isArray(capability.models) ? capability.models : []))
+          .map((modelOption) => [
+            String(modelOption.value ?? modelOption.label ?? ''),
+            { label: String(modelOption.label ?? ''), value: modelOption.value },
+          ])
       ).values()
-    ).filter((m) => m.label);
-    return { aspectRatios, qualities, maxCount } as (typeof PROVIDER_CAPABILITIES)[keyof typeof PROVIDER_CAPABILITIES];
+    ).filter((modelOption) => modelOption.label);
+    return { aspectRatios, qualities, maxCount, models } satisfies ProviderCapabilities;
   }, [provider]);
 
   const modelOptions = useMemo(() => {
@@ -176,26 +136,8 @@ export default function PageComponent({ locale, prompts }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider, selectedId, item?.model, modelOptions]);
 
-  const pickClosestAspect = (w: number, h: number, options: string[]) => {
-    const ratio = w > 0 && h > 0 ? w / h : 1;
-    const parse = (s: string) => {
-      const [a, b] = String(s).split(':').map((x) => Number(x));
-      if (!a || !b) return 1;
-      return a / b;
-    };
-    let best = options[0] || '1:1';
-    let bestScore = Number.POSITIVE_INFINITY;
-    for (const opt of options) {
-      const r = parse(opt);
-      // Use log distance so 1/2 and 2/1 are symmetric.
-      const score = Math.abs(Math.log(ratio / r));
-      if (score < bestScore) {
-        bestScore = score;
-        best = opt;
-      }
-    }
-    return best;
-  };
+  const applyClosestAspectRatio = (w: number, h: number, options: string[]) =>
+    pickClosestAspectRatio(w, h, options);
 
   useEffect(() => {
     // When template changes, auto-pick aspect ratio from the first image (unless user manually changed it).
@@ -216,7 +158,7 @@ export default function PageComponent({ locale, prompts }: Props) {
       const w = Number(img.naturalWidth || 0);
       const h = Number(img.naturalHeight || 0);
       if (!w || !h) return;
-      const next = pickClosestAspect(w, h, capabilities.aspectRatios);
+      const next = applyClosestAspectRatio(w, h, capabilities.aspectRatios);
       setAspectRatio((prev) => (prev === next ? prev : next));
     };
     img.onerror = () => {
@@ -230,15 +172,46 @@ export default function PageComponent({ locale, prompts }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item?.id, item?.images, capabilities.aspectRatios, aspectTouched]);
 
-  const [uiState, setUiState] = useState<UiState>('idle');
-  const [providerJobId, setProviderJobId] = useState<string | null>(null);
-  const [images, setImages] = useState<string[]>([]);
+  const generationMessages = useMemo(
+    () => ({
+      missingPrompt: t('gen.missingPrompt'),
+      createFailed: t('gen.createFailed'),
+      generationFailed: t('gen.generationFailed'),
+      pollingFailed: t('gen.pollingFailed'),
+    }),
+    [t],
+  );
+
+  const {
+    uiState,
+    setUiState,
+    providerJobId,
+    setProviderJobId,
+    images,
+    setImages,
+    error,
+    canGenerate,
+    resetGeneration,
+    startGeneration,
+  } = useGenerationJob({
+    locale,
+    provider,
+    getApiKeyOverride,
+    messages: generationMessages,
+  });
   const [ratioByUrl, setRatioByUrl] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState(false);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  /** First persist effect run is skipped so we don't overwrite localStorage with [] before hydrate runs. */
-  const historyHydrateSaveSkipRef = useRef(true);
-  const lastSavedJobRef = useRef<string | null>(null);
+  const { history, setHistory } = useGenerationHistory({
+    uiState,
+    images,
+    providerJobId,
+    prompt: promptText,
+    model: model || item?.model || 'GPT Image 2',
+    provider,
+    aspectRatio,
+    quality,
+    count,
+  });
   const [swipeViewer, setSwipeViewer] = useState<SwipeViewerState | null>(null);
 
   useEffect(() => {
@@ -255,7 +228,7 @@ export default function PageComponent({ locale, prompts }: Props) {
       const w = Number(img.naturalWidth || 0);
       const h = Number(img.naturalHeight || 0);
       if (!w || !h) return;
-      const next = pickClosestAspect(w, h, capabilities.aspectRatios);
+      const next = applyClosestAspectRatio(w, h, capabilities.aspectRatios);
       setAspectRatio((prev) => (prev === next ? prev : next));
     };
     img.onerror = () => {
@@ -269,21 +242,12 @@ export default function PageComponent({ locale, prompts }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uiState, images?.[0], capabilities.aspectRatios]);
 
-  const proxifyImageList = (list: string[]) =>
-    list.map((u) => {
-      const s = String(u || '');
-      if (/^https?:\/\//i.test(s)) {
-        return `${localeApiPath(locale, '/api/image-proxy')}?url=${encodeURIComponent(s)}`;
-      }
-      return s;
-    });
-
   const openViewer = (
     list: string[],
     idx: number,
     opts?: { title?: string; prefix?: string; showDownload?: boolean }
   ) => {
-    const proxied = proxifyImageList(list.filter(Boolean));
+    const proxied = proxifyImageList(locale, list.filter(Boolean));
     if (!proxied.length) return;
     const maxIdx = proxied.length - 1;
     setSwipeViewer({
@@ -313,23 +277,6 @@ export default function PageComponent({ locale, prompts }: Props) {
     return () => window.clearInterval(id);
   }, [reduceMotion, heroCarouselItems.length]);
 
-  useEffect(() => {
-    try {
-      const providers = ['atlascloud', 'replicate'];
-      const map: Record<string, string> = {};
-      for (const p of providers) map[p] = localStorage.getItem(`op_apiKey_${p}`) || '';
-      setApiKeyByProvider(map);
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  useEffect(() => {
-    apiKeyByProviderRef.current = apiKeyByProvider;
-  }, [apiKeyByProvider]);
-
-  const getApiKeyOverride = (p: string) => (apiKeyByProviderRef.current[p] || '').trim();
-
   const providerMeta = useMemo(() => {
     const map: Record<string, { label: string; Icon: any }> = {
       internal: { label: 'internal', Icon: LuShield },
@@ -354,49 +301,9 @@ export default function PageComponent({ locale, prompts }: Props) {
     prevProviderRef.current = provider;
     setProvider(next);
     setKeyDialogProvider(next);
-    setKeyDraft(apiKeyByProviderRef.current[next] || '');
+    setKeyDraft(getApiKeyOverride(next));
     setKeyDialogOpen(true);
   };
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('op_create_history');
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return;
-      const cleaned: HistoryEntry[] = parsed
-        .filter((x) => x && typeof x === 'object')
-        .map((x: any) => ({
-          id: String(x.id || ''),
-          createdAt: Number(x.createdAt || Date.now()),
-          providerJobId: x.providerJobId ? String(x.providerJobId) : null,
-          prompt: String(x.prompt || ''),
-          model: String(x.model || ''),
-          provider: String(x.provider || ''),
-          aspectRatio: String(x.aspectRatio || ''),
-          quality: String(x.quality || ''),
-          count: Number(x.count || 1),
-          images: Array.isArray(x.images) ? x.images.filter((u: any) => typeof u === 'string') : [],
-        }))
-        .filter((x) => x.id && x.prompt);
-      if (cleaned.length) setHistory(cleaned.slice(0, 30));
-    } catch {
-      // ignore
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (historyHydrateSaveSkipRef.current) {
-      historyHydrateSaveSkipRef.current = false;
-      return;
-    }
-    try {
-      localStorage.setItem('op_create_history', JSON.stringify(history.slice(0, 30)));
-    } catch {
-      // ignore
-    }
-  }, [history]);
 
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
@@ -424,123 +331,22 @@ export default function PageComponent({ locale, prompts }: Props) {
   }, []);
 
   useEffect(() => {
-    // reset when switching prompt
     setPromptText(item?.prompt ?? '');
-    setError(null);
-    setUiState('idle');
-    setProviderJobId(null);
-    setImages([]);
-  }, [selectedId, item?.prompt]);
-
-  useEffect(() => {
-    if (uiState !== 'succeeded') return;
-    if (!images.length) return;
-    const jobKey = providerJobId ?? '__no_job__';
-    if (lastSavedJobRef.current === jobKey) return;
-    lastSavedJobRef.current = jobKey;
-
-    const entry: HistoryEntry = {
-      id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
-      createdAt: Date.now(),
-      providerJobId,
-      prompt: promptText,
-      model: model || item?.model || 'GPT Image 2',
-      provider,
-      aspectRatio,
-      quality,
-      count,
-      images,
-    };
-
-    setHistory((prev) => [entry, ...prev].slice(0, 30));
-  }, [
-    uiState,
-    images,
-    providerJobId,
-    promptText,
-    provider,
-    aspectRatio,
-    quality,
-    count,
-    item?.model,
-  ]);
-
-  useEffect(() => {
-    if (!providerJobId) return;
-    if (uiState !== 'queued' && uiState !== 'running') return;
-
-    let cancelled = false;
-    const tick = async () => {
-      try {
-        const encoded = providerJobId || '';
-        const p = encoded.includes(':') ? encoded.slice(0, encoded.indexOf(':')) : provider;
-        const key = getApiKeyOverride(p);
-        const res = await fetch(localeApiPath(locale, `/api/generations/${encodeURIComponent(providerJobId)}`), {
-          cache: 'no-store',
-          headers: key ? { 'x-op-api-key': key } : undefined,
-        }).then((r) => r.json());
-        if (cancelled) return;
-        if (res?.status === 'running' || res?.status === 'queued') {
-          setUiState(res.status);
-          return;
-        }
-        if (res?.status === 'succeeded') {
-          setUiState('succeeded');
-          setImages(Array.isArray(res.images) ? res.images : []);
-          return;
-        }
-        setUiState('failed');
-        setError(res?.error || t('gen.generationFailed'));
-      } catch (e: any) {
-        if (cancelled) return;
-        setUiState('failed');
-        setError(e?.message || t('gen.pollingFailed'));
-      }
-    };
-
-    const interval = setInterval(tick, 2000);
-    tick();
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [locale, providerJobId, uiState, t]);
-
-  const canGenerate = uiState === 'idle' || uiState === 'failed' || uiState === 'succeeded';
+    resetGeneration();
+  }, [selectedId, item?.prompt, resetGeneration]);
 
   const hero = useMemo(() => t.raw('createPage.hero' as any) as CreateHeroBlock, [t]);
 
   const onGenerate = async () => {
-    const p = promptText.trim();
-    if (!p) {
-      setError(t('gen.missingPrompt'));
-      return;
-    }
-    setError(null);
-    setUiState('queued');
-    setImages([]);
-    try {
-      const res = await fetch(localeApiPath(locale, '/api/generations'), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-op-user-id': getOrCreateUserId() },
-        body: JSON.stringify({
-          provider: provider === 'internal' ? undefined : provider,
-          prompt: p,
-          apiKey: provider === 'internal' ? undefined : getApiKeyOverride(provider) || undefined,
-          model: model || item?.model || 'GPT Image 2',
-          aspectRatio,
-          quality,
-          count,
-        }),
-      }).then((r) => r.json());
-
-      if (res?.error) throw new Error(res.error);
-      setProviderJobId(res.providerJobId);
-      setUiState(res.status || 'queued');
-    } catch (e: any) {
-      setUiState('failed');
-      setError(e?.message || t('gen.createFailed'));
-    }
+    await startGeneration({
+      provider,
+      prompt: promptText,
+      apiKey: provider === 'internal' ? undefined : getApiKeyOverride(provider) || undefined,
+      model: model || item?.model || 'GPT Image 2',
+      aspectRatio,
+      quality,
+      count,
+    });
   };
 
   const internalConfigHint = useMemo(() => {
@@ -560,76 +366,6 @@ export default function PageComponent({ locale, prompts }: Props) {
 
     return t.raw('createPage.internalConfig' as any) as InternalConfigCopy;
   }, [provider, error, t]);
-
-  const formatTimeAgo = (ts: number) => {
-    const now = Date.now();
-    const diffMs = now - Number(ts || 0);
-    if (!Number.isFinite(diffMs) || diffMs < 0) return '';
-
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHr = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHr / 24);
-    const diffWeek = Math.floor(diffDay / 7);
-
-    const rtf =
-      typeof Intl !== 'undefined' && (Intl as any).RelativeTimeFormat
-        ? new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
-        : null;
-
-    const fmt = (value: number, unit: Intl.RelativeTimeFormatUnit) => {
-      if (rtf) return rtf.format(-value, unit);
-      // fallback (en-ish)
-      const u = value === 1 ? unit : `${unit}s`;
-      return `${value} ${u} ago`;
-    };
-
-    if (diffSec < 60) return fmt(Math.max(1, diffSec), 'second');
-    if (diffMin < 60) return fmt(diffMin, 'minute');
-    if (diffHr < 24) return fmt(diffHr, 'hour');
-    if (diffDay < 7) return fmt(diffDay, 'day');
-    return fmt(diffWeek, 'week');
-  };
-
-  const downloadWithRandomName = async (url: string) => {
-    const original = String(url || '').trim();
-    if (!original) return;
-    const src = /^https?:\/\//i.test(original)
-      ? `${localeApiPath(locale, '/api/image-proxy')}?url=${encodeURIComponent(original)}`
-      : original;
-
-    const extFromUrl = (u: string) => {
-      try {
-        const parsed = new URL(u, 'http://local');
-        const p = parsed.pathname || '';
-        const m = p.match(/\.(png|jpg|jpeg|webp|gif)$/i);
-        if (m?.[1]) return m[1].toLowerCase() === 'jpeg' ? 'jpg' : m[1].toLowerCase();
-      } catch {
-        // ignore
-      }
-      return 'png';
-    };
-
-    const randomId =
-      (globalThis as any).crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    const filename = `op_${randomId}.${extFromUrl(original)}`;
-
-    const res = await fetch(src, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`download failed: ${res.status}`);
-    const blob = await res.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    try {
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = filename;
-      a.rel = 'noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    } finally {
-      URL.revokeObjectURL(blobUrl);
-    }
-  };
 
   return (
     <>
@@ -1353,14 +1089,6 @@ export default function PageComponent({ locale, prompts }: Props) {
 
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
               {(() => {
-                const proxify = (u: string) => {
-                  const s = String(u || '');
-                  if (/^https?:\/\//i.test(s)) {
-        return `${localeApiPath(locale, '/api/image-proxy')}?url=${encodeURIComponent(s)}`;
-      }
-                  return s;
-                };
-
                 const railCopy = {
                   currentEmpty: t('createPage.railCurrentEmpty'),
                   currentJump: t('createPage.railCurrentJump'),
@@ -1419,7 +1147,7 @@ export default function PageComponent({ locale, prompts }: Props) {
                         ) : images.length ? (
                           <div className="flex flex-col gap-2">
                             {images.map((u, idx) => {
-                              const src = proxify(u);
+                              const src = proxifyImageUrl(locale, u);
                               return (
                                 <div key={`${u}_${idx}`} className="w-full">
                                   <button
@@ -1448,7 +1176,7 @@ export default function PageComponent({ locale, prompts }: Props) {
                                         title={t('createPage.downloadTitle')}
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          downloadWithRandomName(u).catch(() => {});
+                                          downloadImageWithRandomName(locale, u).catch(() => {});
                                         }}
                                       >
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -1555,7 +1283,7 @@ export default function PageComponent({ locale, prompts }: Props) {
                               {h.images?.length ? (
                                 <div className="mt-3 flex flex-col gap-2">
                                   {h.images.map((u, idx) => {
-                                    const src = proxify(u);
+                                    const src = proxifyImageUrl(locale, u);
                                     return (
                                       <div key={`${u}_${idx}`} className="w-full">
                                         <button
@@ -1584,7 +1312,7 @@ export default function PageComponent({ locale, prompts }: Props) {
                                               title={t('createPage.downloadTitle')}
                                               onClick={(e) => {
                                                 e.stopPropagation();
-                                                downloadWithRandomName(u).catch(() => {});
+                                                downloadImageWithRandomName(locale, u).catch(() => {});
                                               }}
                                             >
                                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -1697,13 +1425,7 @@ export default function PageComponent({ locale, prompts }: Props) {
                 <button
                   className="h-9 rounded-xl border border-[var(--border2)] px-4 text-sm text-[var(--text2)] hover:text-[var(--text)]"
                   onClick={() => {
-                    const p = keyDialogProvider;
-                    try {
-                      localStorage.removeItem(`op_apiKey_${p}`);
-                    } catch {
-                      // ignore
-                    }
-                    setApiKeyByProvider((prev) => ({ ...prev, [p]: '' }));
+                    clearApiKeyOverride(keyDialogProvider);
                     setKeyDialogOpen(false);
                   }}
                 >
@@ -1712,15 +1434,7 @@ export default function PageComponent({ locale, prompts }: Props) {
                 <button
                   className="h-9 rounded-xl bg-[var(--amber)] px-4 text-sm font-semibold text-[var(--bg)]"
                   onClick={() => {
-                    const p = keyDialogProvider;
-                    const v = keyDraft.trim();
-                    try {
-                      if (v) localStorage.setItem(`op_apiKey_${p}`, v);
-                      else localStorage.removeItem(`op_apiKey_${p}`);
-                    } catch {
-                      // ignore
-                    }
-                    setApiKeyByProvider((prev) => ({ ...prev, [p]: v }));
+                    saveApiKeyOverride(keyDialogProvider, keyDraft);
                     setKeyDialogOpen(false);
                   }}
                 >

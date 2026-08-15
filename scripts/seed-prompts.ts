@@ -5,66 +5,20 @@
 import { config } from 'dotenv';
 import { sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 import * as schema from '../src/db/schema';
+import { GPT_IMAGE_2_PROMPT_ASSETS } from '../src/data/imports/gpt-image2-prompts';
+import { promptAssetToSeedRow } from '../src/lib/prompts/prompt-asset';
 
 config({ path: '.env.local' });
 config({ path: '.env' });
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-function slugify(input: string) {
-  return String(input)
-    .toLowerCase()
-    .trim()
-    .replace(/['"]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-}
-
-function asStringArray(value: unknown) {
-  if (!Array.isArray(value)) return [];
-  return value.filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
-}
 
 function fail(msg: string): never {
   console.error(msg);
   process.exit(1);
 }
 
-const jsonPath = path.resolve(__dirname, '../src/data/imports/gpt-image2-prompts.json');
-const imported = JSON.parse(readFileSync(jsonPath, 'utf8')) as unknown[];
-if (!Array.isArray(imported)) fail(`Expected array in ${jsonPath}`);
-
-const rows = imported.map((item: Record<string, unknown>, idx: number) => {
-  const title = typeof item.title === 'string' ? item.title : `Untitled ${idx + 1}`;
-  const description = typeof item.description === 'string' ? item.description : '';
-  const prompt = typeof item.prompt === 'string' ? item.prompt : '';
-  const tags = asStringArray(item.tags);
-  const images = asStringArray(item.images);
-  const authorHandle =
-    typeof item.user_name === 'string' ? item.user_name : null;
-  const sourceUrl =
-    typeof item.source_url === 'string' ? item.source_url : null;
-  const base = slugify(title) || `prompt-${idx + 1}`;
-  const slug = `${base}-${idx + 1}`;
-  return {
-    slug,
-    title,
-    description,
-    prompt,
-    templateId: 'japanese-fuji-film-portrait',
-    model: 'GPT Image 2',
-    tags,
-    sourceUrl,
-    authorHandle,
-    images,
-    sortOrder: idx,
-  };
-});
+const rows = GPT_IMAGE_2_PROMPT_ASSETS.map(promptAssetToSeedRow);
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL?.trim();

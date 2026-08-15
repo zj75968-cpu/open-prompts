@@ -1,0 +1,64 @@
+import type { PromptVisibility, TemplateRecord } from '~/lib/prompts/template-types';
+import type { SubmitCategoryKey } from '~/lib/prompts/prompt-categories';
+import type { XSourceDuplicate } from '~/lib/x-import/x-source-duplicate';
+
+export { MAX_TITLE } from '~/lib/prompts/template-limits';
+
+export const MAX_RESULT_IMAGES = 8;
+
+export const MODEL_IDS = ['gptImage2', 'midjourney', 'dalle3', 'flux', 'sd', 'ideogram'] as const;
+
+export type SubmitModelId = (typeof MODEL_IDS)[number];
+
+export const MODEL_EMOJI: Record<SubmitModelId, string> = {
+  gptImage2: '🤖',
+  midjourney: '🎨',
+  dalle3: '✦',
+  flux: '⚡',
+  sd: '🌊',
+  ideogram: '💎',
+};
+
+export type SubmitFormPayload = {
+  title: string;
+  description: string;
+  prompt: string;
+  modelId: SubmitModelId;
+  category: SubmitCategoryKey | '';
+  tags: string[];
+  images: string[];
+  sourceUrl?: string;
+  authorHandle?: string;
+  visibility: PromptVisibility;
+};
+
+export type SubmitFormValues = Omit<SubmitFormPayload, 'sourceUrl' | 'authorHandle'> & {
+  sourceUrl: string;
+  authorHandle: string;
+  submissionId: string;
+};
+
+export type LoadTemplateResponse = {
+  item?: TemplateRecord;
+  error?: string;
+};
+
+export type XImportResponse = {
+  ok?: boolean;
+  error?: string;
+  duplicate?: XSourceDuplicate;
+  title?: string;
+  description?: string;
+  prompt?: string;
+  imageUrls?: string[];
+  sourceUrl?: string;
+  authorHandle?: string;
+};
+
+export type SubmitTemplateResponse = {
+  ok?: boolean;
+  id?: number;
+  item?: TemplateRecord;
+  error?: string;
+  duplicate?: XSourceDuplicate;
+};
