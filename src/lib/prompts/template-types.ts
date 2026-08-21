@@ -7,18 +7,12 @@ import {
 
 export type { PromptReviewStatus, PromptVisibility };
 
+import type { PromptContent } from '~/lib/prompts/prompt-model';
 import type { SubmitCategoryKey } from '~/lib/prompts/prompt-categories';
 
-export type TemplateRecord = {
+export type TemplateRecord = PromptContent & {
   id: number;
   slug: string;
-  title: string;
-  description: string;
-  prompt: string;
-  model: string;
-  category: SubmitCategoryKey | null;
-  tags: string[];
-  images: string[];
   sourceUrl: string | null;
   authorHandle: string | null;
   status: PromptReviewStatus;

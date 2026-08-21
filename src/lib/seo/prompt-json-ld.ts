@@ -1,4 +1,4 @@
-import type { PromptGalleryItem } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { absoluteUrl } from '~/lib/seo/metadata';
 
 type BreadcrumbItem = { name: string; path: string };

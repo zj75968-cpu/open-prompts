@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { CoverImage } from '~/components/prompt-gallery/CoverImage';
 import { galleryAuthorLabel } from '~/lib/prompts/gallery-attribution';
-import type { PromptDetailItem } from '~/lib/prompts/prompt-detail-item';
+import type { PromptDetailItem } from '~/lib/prompts/prompt-model';
 
 export type { PromptDetailItem };
 

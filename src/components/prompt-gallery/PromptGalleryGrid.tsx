@@ -4,7 +4,7 @@ import '../../app/[locale]/gallery/gallery-page.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import type { PromptGalleryItem } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { PromptGalleryCard } from '~/components/prompt-gallery/PromptGalleryCard';
 import { PromptGalleryMasonry } from '~/components/prompt-gallery/PromptGalleryMasonry';
 import { galleryAuthorLabel, galleryAuthorUrl } from '~/lib/prompts/gallery-attribution';

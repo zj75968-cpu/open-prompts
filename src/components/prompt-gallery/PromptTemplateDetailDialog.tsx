@@ -1,10 +1,8 @@
 'use client';
 
 import { useEffect, type ReactNode } from 'react';
-import {
-  PromptDetailPanel,
-  type PromptDetailItem,
-} from '~/components/prompt-gallery/PromptDetailPanel';
+import { PromptDetailPanel } from '~/components/prompt-gallery/PromptDetailPanel';
+import type { PromptDetailItem } from '~/lib/prompts/prompt-model';
 
 export type { PromptDetailItem };
 

@@ -1,7 +1,7 @@
 import './landing-page.css';
 import type { ReactNode } from 'react';
 import { getTranslations } from 'next-intl/server';
-import type { PromptGalleryItem } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { OpenPromptsSiteFooter } from '~/components/open-prompts/OpenPromptsSiteFooter';
 import { OpenPromptsSiteHeader } from '~/components/open-prompts/OpenPromptsSiteHeader';
 import { galleryHref } from '~/lib/prompts/gallery-path';

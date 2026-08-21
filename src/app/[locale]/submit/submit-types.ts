@@ -43,6 +43,15 @@ export type LoadTemplateResponse = {
   error?: string;
 };
 
+export type XImportFormValues = {
+  title?: string;
+  description?: string;
+  prompt?: string;
+  images?: string[];
+  sourceUrl?: string;
+  authorHandle?: string;
+};
+
 export type XImportResponse = {
   ok?: boolean;
   error?: string;

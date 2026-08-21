@@ -1,7 +1,7 @@
 import type { AdminTemplateRecord, TemplateRecord } from '~/lib/prompts/template-types';
 import type { AdminUserDetail, AdminUserSummary } from '~/lib/users/admin-user-record';
 import type { DailyCountPoint, AdminUserTrendRange } from '~/lib/users/admin-user-trend';
-import type { PromptDetailItem } from '~/components/prompt-gallery/PromptTemplateDetailDialog';
+import type { PromptDetailItem } from '~/lib/prompts/prompt-model';
 import type { ResolvedAccountPanel } from '~/lib/account/account-path';
 import type { DisplayStatusKey } from './account-utils';
 

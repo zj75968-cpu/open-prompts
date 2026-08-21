@@ -3,7 +3,7 @@
 import './gallery-page.css';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import type { PromptGalleryItem } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { PromptGalleryCard } from '~/components/prompt-gallery/PromptGalleryCard';
 import { GalleryFilterStrip } from '~/components/prompt-gallery/GalleryFilterStrip';
 import { PromptGalleryMasonry } from '~/components/prompt-gallery/PromptGalleryMasonry';

@@ -9,11 +9,11 @@ import { accountPanelHref } from '~/lib/account/account-path';
 import { OpenPromptsSiteFooter } from '~/components/open-prompts/OpenPromptsSiteFooter';
 import { OpenPromptsSiteHeader } from '~/components/open-prompts/OpenPromptsSiteHeader';
 import { UserAvatar } from '~/components/open-prompts/UserAvatar';
+import { PromptTemplateDetailDialog } from '~/components/prompt-gallery/PromptTemplateDetailDialog';
 import {
-  PromptTemplateDetailDialog,
   templateRecordToDetailItem,
   type PromptDetailItem,
-} from '~/components/prompt-gallery/PromptTemplateDetailDialog';
+} from '~/lib/prompts/prompt-detail-item';
 import type { AdminTemplateRecord, TemplateRecord } from '~/lib/prompts/template-types';
 import { ADMIN_USER_TREND_RANGES, type DailyCountPoint, type AdminUserTrendRange } from '~/lib/users/admin-user-trend';
 import { submitEditorHref } from '~/lib/prompts/submit-editor-path';

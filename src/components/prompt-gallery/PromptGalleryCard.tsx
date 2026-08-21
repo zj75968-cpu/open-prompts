@@ -1,6 +1,6 @@
 import { LuMaximize2 } from 'react-icons/lu';
 import { CoverImage } from '~/components/prompt-gallery/CoverImage';
-import type { PromptGalleryItem } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { formatGalleryCardDate } from '~/lib/prompts/gallery-attribution';
 
 type Props = {

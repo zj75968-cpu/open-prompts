@@ -1,27 +1,14 @@
-export type PromptDetailItem = {
-  /** Slug or gallery id used for `?template=` on the create page. */
-  id: string;
-  title: string;
-  description: string;
-  prompt: string;
-  model: string;
-  tags: string[];
-  images: string[];
-  sourceUrl?: string | null;
-  authorHandle?: string | null;
-};
+import type {
+  PromptDetailItem,
+  PromptGalleryItem,
+} from '~/lib/prompts/prompt-model';
+import type { TemplateRecord } from '~/lib/prompts/template-types';
 
-export function promptGalleryItemToDetailItem(item: {
-  id: string;
-  title: string;
-  description: string;
-  prompt: string;
-  model: string;
-  tags: string[];
-  images: string[];
-  sourceUrl?: string;
-  authorHandle?: string;
-}): PromptDetailItem {
+export type { PromptDetailItem } from '~/lib/prompts/prompt-model';
+
+export function promptGalleryItemToDetailItem(
+  item: PromptGalleryItem,
+): PromptDetailItem {
   return {
     id: item.id,
     title: item.title,
@@ -35,17 +22,9 @@ export function promptGalleryItemToDetailItem(item: {
   };
 }
 
-export function templateRecordToDetailItem(row: {
-  slug: string;
-  title: string;
-  description: string;
-  prompt: string;
-  model: string;
-  tags: string[];
-  images: string[];
-  sourceUrl?: string | null;
-  authorHandle?: string | null;
-}): PromptDetailItem {
+export function templateRecordToDetailItem(
+  row: TemplateRecord,
+): PromptDetailItem {
   return {
     id: row.slug,
     title: row.title,

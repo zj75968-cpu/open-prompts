@@ -1,4 +1,4 @@
-import type { PromptGalleryItem } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 
 export type SeoFaq = { q: string; a: string };
 

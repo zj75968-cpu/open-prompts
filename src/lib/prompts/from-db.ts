@@ -1,5 +1,5 @@
 import { desc } from 'drizzle-orm';
-import type { PromptGalleryItem } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { getDb } from '~/db/client';
 import { prompts } from '~/db/schema';
 import {

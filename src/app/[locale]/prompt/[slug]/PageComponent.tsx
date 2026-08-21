@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import type { PromptGalleryItem } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { PromptDetailPanel } from '~/components/prompt-gallery/PromptDetailPanel';
 import { promptGalleryItemToDetailItem } from '~/lib/prompts/prompt-detail-item';
 import { OpenPromptsSiteFooter } from '~/components/open-prompts/OpenPromptsSiteFooter';

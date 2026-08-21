@@ -1,6 +1,6 @@
 import '~/app/[locale]/landing-page.css';
 import { getTranslations } from 'next-intl/server';
-import type { PromptGalleryItem } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { galleryHref } from '~/lib/prompts/gallery-path';
 import { promptHref } from '~/lib/prompts/seo-paths';
 import { formatGalleryStatCount } from '~/lib/prompts/gallery-stats';

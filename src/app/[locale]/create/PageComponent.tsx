@@ -1,79 +1,65 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import type { PromptGalleryItem } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { CoverImage } from '~/components/prompt-gallery/CoverImage';
 import { PromptGalleryCard } from '~/components/prompt-gallery/PromptGalleryCard';
 import { PromptGallerySwipeViewer } from '~/components/prompt-gallery/PromptGallerySwipeViewer';
 import { OpenPromptsSiteFooter } from '~/components/open-prompts/OpenPromptsSiteFooter';
 import { OpenPromptsSiteHeader } from '~/components/open-prompts/OpenPromptsSiteHeader';
-import { PROVIDER_CAPABILITIES, type ProviderCapabilities } from '~/lib/generation/capabilities';
 import { HiDotsHorizontal } from 'react-icons/hi';
 import { LuCheck, LuChevronDown, LuHash, LuLayers, LuMaximize2, LuShield, LuSquare } from 'react-icons/lu';
 import { FaCubes } from 'react-icons/fa';
 import { TbCloud } from 'react-icons/tb';
 import { downloadImageWithRandomName, pickClosestAspectRatio, proxifyImageList, proxifyImageUrl } from './create-utils';
 import type { CreateHeroBlock, InternalConfigCopy, SwipeViewerState } from './types';
+import { useCreateTemplateSelection } from './use-create-template-selection';
 import { useGenerationHistory } from './use-generation-history';
 import { useGenerationJob } from './use-generation-job';
-import { useProviderApiKeys } from './use-provider-api-keys';
+import { useGenerationSettings } from './use-generation-settings';
 
 type Props = { locale: string; prompts: PromptGalleryItem[] };
 
 export default function PageComponent({ locale, prompts }: Props) {
   const t = useTranslations('OpenPrompts');
-  const searchParams = useSearchParams();
-  const [query, setQuery] = useState('');
-  const [selectedId, setSelectedId] = useState<string>(prompts[0]?.id ?? '');
+  const {
+    query,
+    setQuery,
+    selectedId,
+    setSelectedId,
+    item,
+    filteredTemplates,
+    heroCarouselItems,
+  } = useCreateTemplateSelection(prompts);
   const [heroCarouselIdx, setHeroCarouselIdx] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [ratioById, setRatioById] = useState<Record<string, string>>({});
-  const item = useMemo(() => {
-    const found = prompts.find((p) => p.id === selectedId);
-    return found ?? prompts[0];
-  }, [selectedId, prompts]);
-
-  useEffect(() => {
-    if (!searchParams) return;
-    const idFromUrl = searchParams.get('template') || searchParams.get('templateId') || searchParams.get('id');
-    if (!idFromUrl) return;
-    const exists = prompts.some((p) => p.id === idFromUrl);
-    if (!exists) return;
-    setSelectedId(idFromUrl);
-    const el = document.getElementById('op-create-prompt');
-    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [searchParams, prompts]);
-
-  const filteredTemplates = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return prompts;
-    return prompts.filter((p) => {
-      return (
-        p.title.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q) ||
-        p.prompt.toLowerCase().includes(q) ||
-        p.tags.some((x) => x.toLowerCase().includes(q))
-      );
-    });
-  }, [query, prompts]);
-
-  const heroCarouselItems = useMemo(() => {
-    // Keep it short and stable so the Hero feels intentional.
-    const picked = prompts.slice(0, 8).filter((p) => p?.id && p?.title);
-    return picked.length ? picked : prompts.slice(0, 1);
-  }, [prompts]);
 
   const [promptText, setPromptText] = useState('');
 
-  const [provider, setProvider] = useState<string>('internal');
-  const [aspectRatio, setAspectRatio] = useState<string>('9:16');
-  const [aspectTouched, setAspectTouched] = useState(false);
-  const [model, setModel] = useState<string>('');
-  const [quality, setQuality] = useState<string>('1k');
-  const [count, setCount] = useState<number>(1);
-  const { getApiKeyOverride, saveApiKeyOverride, clearApiKeyOverride } = useProviderApiKeys();
+  const {
+    provider,
+    setProvider,
+    aspectRatio,
+    setAspectRatio,
+    aspectTouched,
+    setAspectTouched,
+    model,
+    setModel,
+    quality,
+    setQuality,
+    count,
+    setCount,
+    capabilities,
+    modelOptions,
+    getApiKeyOverride,
+    saveApiKeyOverride,
+    clearApiKeyOverride,
+  } = useGenerationSettings({
+    templateId: selectedId,
+    templateModel: item?.model,
+  });
   const prevProviderRef = useRef<string>(provider);
   /** null = closed; non-null = open at fixed viewport position */
   const [moreMenu, setMoreMenu] = useState<{ top: number; left: number } | null>(null);
@@ -83,66 +69,8 @@ export default function PageComponent({ locale, prompts }: Props) {
   const [keyDialogProvider, setKeyDialogProvider] = useState<string>(provider);
   const [keyDraft, setKeyDraft] = useState('');
 
-  const capabilities = useMemo(() => {
-    if (provider !== 'internal') {
-      return PROVIDER_CAPABILITIES[provider] || PROVIDER_CAPABILITIES.atlascloud;
-    }
-    const all = Object.values(PROVIDER_CAPABILITIES);
-    const aspectRatios = Array.from(new Set(all.flatMap((capability) => capability.aspectRatios || [])));
-    const qualities = Array.from(new Set(all.flatMap((capability) => capability.qualities || [])));
-    const maxCount = Math.max(1, ...all.map((capability) => Number(capability.maxCount || 1)));
-    const models = Array.from(
-      new Map(
-        all
-          .flatMap((capability) => (Array.isArray(capability.models) ? capability.models : []))
-          .map((modelOption) => [
-            String(modelOption.value ?? modelOption.label ?? ''),
-            { label: String(modelOption.label ?? ''), value: modelOption.value },
-          ])
-      ).values()
-    ).filter((modelOption) => modelOption.label);
-    return { aspectRatios, qualities, maxCount, models } satisfies ProviderCapabilities;
-  }, [provider]);
-
-  const modelOptions = useMemo(() => {
-    if (provider !== 'internal') {
-      const opts = PROVIDER_CAPABILITIES[provider]?.models;
-      return Array.isArray(opts) && opts.length ? opts : [{ label: item?.model ?? 'Default', value: item?.model ?? 'Default' }];
-    }
-    const base = PROVIDER_CAPABILITIES.internal?.models;
-    const opts =
-      Array.isArray(base) && base.length
-        ? base
-        : [{ label: item?.model ?? 'GPT Image 2', value: item?.model ?? 'GPT Image 2' }];
-    // If template has a specific model, make sure it remains selectable.
-    const templateLabel = String(item?.model || '').trim();
-    if (templateLabel) {
-      const key = templateLabel;
-      const exists = opts.some((m) => String(m.value ?? m.label) === key);
-      if (!exists) return [{ label: templateLabel, value: templateLabel }, ...opts];
-    }
-    return opts;
-  }, [provider, item?.model]);
-
-  useEffect(() => {
-    // Keep selected model valid when provider/template changes.
-    const values = modelOptions.map((o) => String(o.value ?? o.label));
-    const preferred = String(item?.model || '').trim();
-    const next =
-      (preferred && values.includes(preferred) ? preferred : '') ||
-      (model && values.includes(model) ? model : '') ||
-      (values[0] || '');
-    setModel((prev) => (prev === next ? prev : next));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider, selectedId, item?.model, modelOptions]);
-
   const applyClosestAspectRatio = (w: number, h: number, options: string[]) =>
     pickClosestAspectRatio(w, h, options);
-
-  useEffect(() => {
-    // When template changes, auto-pick aspect ratio from the first image (unless user manually changed it).
-    setAspectTouched(false);
-  }, [selectedId]);
 
   useEffect(() => {
     if (aspectTouched) return;

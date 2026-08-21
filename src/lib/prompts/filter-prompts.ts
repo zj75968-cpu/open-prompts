@@ -1,4 +1,4 @@
-import type { PromptGalleryItem } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import type { SubmitCategoryKey } from '~/lib/prompts/prompt-categories';
 
 export function filterPromptsByModel(prompts: PromptGalleryItem[], model: string): PromptGalleryItem[] {

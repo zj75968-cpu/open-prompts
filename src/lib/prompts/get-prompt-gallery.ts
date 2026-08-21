@@ -1,4 +1,5 @@
-import { PROMPT_GALLERY, type PromptGalleryItem } from '~/data/promptGallery';
+import { PROMPT_GALLERY } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { fetchPromptGalleryFromDb } from '~/lib/prompts/from-db';
 
 /**

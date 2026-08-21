@@ -1,7 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { PromptVisibility } from '~/lib/prompts/template-types';
 import type { SubmitCategoryKey } from '~/lib/prompts/prompt-categories';
-import { MAX_RESULT_IMAGES, type SubmitFormValues, type SubmitModelId } from './submit-types';
+import {
+  MAX_RESULT_IMAGES,
+  type SubmitFormValues,
+  type SubmitModelId,
+  type XImportFormValues,
+} from './submit-types';
 import { appendImageUrl, appendUniqueTag, isValidImageSrc } from './submit-utils';
 
 export function useSubmitFormState() {
@@ -40,14 +45,7 @@ export function useSubmitFormState() {
   }, []);
 
   const applyXImportValues = useCallback(
-    (values: {
-      title?: string;
-      description?: string;
-      prompt?: string;
-      images?: string[];
-      sourceUrl?: string;
-      authorHandle?: string;
-    }) => {
+    (values: XImportFormValues) => {
       if (typeof values.title === 'string') setTitle(values.title);
       if (typeof values.description === 'string') setDesc(values.description);
       if (typeof values.prompt === 'string') setPrompt(values.prompt);

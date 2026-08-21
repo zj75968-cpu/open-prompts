@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { PromptGalleryItem } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { PROMPT_TEMPLATES } from '~/data/promptTemplates';
 import { renderPromptTemplate, TemplateValidationError } from '~/lib/templates/render';
 import { BYOK_PROVIDER_NAMES } from '~/lib/generation/provider-names';

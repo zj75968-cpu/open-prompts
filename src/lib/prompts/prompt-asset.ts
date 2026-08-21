@@ -1,4 +1,5 @@
 import { resolvePromptCategory, type SubmitCategoryKey, SUBMIT_CATEGORY_TAGS } from '~/lib/prompts/prompt-categories';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 
 export type PromptAssetProvider = 'openai' | 'midjourney' | 'stable-diffusion' | 'flux' | 'gemini' | 'seedream';
 
@@ -54,20 +55,7 @@ export type ImportedPromptRecord = {
   params?: unknown;
 };
 
-export type PromptGalleryItemInput = {
-  id: string;
-  title: string;
-  description: string;
-  prompt: string;
-  templateId?: string;
-  model: string;
-  category?: SubmitCategoryKey | null;
-  tags: string[];
-  sourceUrl?: string;
-  authorHandle?: string;
-  createdAt?: string;
-  images: string[];
-};
+export type PromptGalleryItemInput = PromptGalleryItem;
 
 export type PromptSeedRowInput = {
   slug: string;

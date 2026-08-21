@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import type { PromptGalleryItem } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { OpenPromptsSiteFooter } from '~/components/open-prompts/OpenPromptsSiteFooter';
 import { OpenPromptsSiteHeader } from '~/components/open-prompts/OpenPromptsSiteHeader';
 import { PromptGalleryGrid } from '~/components/prompt-gallery/PromptGalleryGrid';

@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import type { PromptGalleryItem } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { buildPromptPageJsonLd } from '~/lib/seo/prompt-json-ld';
 
 type Props = {

@@ -1,4 +1,4 @@
-import type { PromptGalleryItem } from '~/data/promptGallery';
+import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { getPromptGallery } from '~/lib/prompts/get-prompt-gallery';
 
 export async function getPromptBySlug(slug: string): Promise<PromptGalleryItem | null> {

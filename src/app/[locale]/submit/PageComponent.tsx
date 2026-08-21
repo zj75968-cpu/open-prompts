@@ -5,9 +5,9 @@ import './submit-page.css';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
-import type { PromptVisibility, TemplateRecord } from '~/lib/prompts/template-types';
+import type { PromptVisibility } from '~/lib/prompts/template-types';
 import {
   getSubmitCategoryTags,
   isSubmitCategoryKey,
@@ -19,15 +19,14 @@ import { parseSubmitEditId, submitEditorHref } from '~/lib/prompts/submit-editor
 import { OpenPromptsSiteFooter } from '~/components/open-prompts/OpenPromptsSiteFooter';
 import { OpenPromptsSiteHeader } from '~/components/open-prompts/OpenPromptsSiteHeader';
 import { accountPanelHref } from '~/lib/account/account-path';
-import { parseXStatusUrl } from '~/lib/x-import/parse-x-status-url';
-import { authorHandleFromXUrl, resolveXAuthorHandle } from '~/lib/x-import/x-author-handle';
-import type { XSourceDuplicate } from '~/lib/x-import/x-source-duplicate';
 import { SubmitPreviewImageStrip } from './SubmitPreviewImageStrip';
 import { SubmitLanding } from './SubmitLanding';
-import { checkXSourceDuplicate, importTemplateFromX, loadTemplateForEdit, saveSubmittedTemplate } from './submit-api';
 import { MAX_RESULT_IMAGES, MAX_TITLE, MODEL_EMOJI, MODEL_IDS } from './submit-types';
-import { buildSubmitPayload, isValidImageSrc, readFileAsDataUrl, templateToSubmitFormValues } from './submit-utils';
+import { isValidImageSrc, readFileAsDataUrl } from './submit-utils';
+import { useEditTemplateWorkflow } from './use-edit-template-workflow';
 import { useSubmitFormState } from './use-submit-form-state';
+import { useSubmitWorkflow } from './use-submit-workflow';
+import { useXImportWorkflow } from './use-x-import-workflow';
 
 export type SubmitPageProps = {
   locale: string;
@@ -101,57 +100,47 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
     removeImage,
     resetCreateForm,
   } = useSubmitFormState();
-  const [loadingTemplate, setLoadingTemplate] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
   const saveVisibility: PromptVisibility = isEditMode
     ? templateVisibility
     : isPrivateMode
       ? 'private'
       : 'public';
 
-  const [xImportBusy, setXImportBusy] = useState(false);
-  const [xImportError, setXImportError] = useState<string | null>(null);
-  const [xImportOk, setXImportOk] = useState(false);
-  const [xDuplicate, setXDuplicate] = useState<XSourceDuplicate | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [shakeId, setShakeId] = useState<string | null>(null);
-  const [blockedHint, setBlockedHint] = useState<string | null>(null);
+  const {
+    loading: loadingTemplate,
+    error: loadError,
+    reload: loadEditTemplate,
+  } = useEditTemplateWorkflow({
+    locale,
+    editId,
+    enabled: isEditMode && authStatus === 'authenticated',
+    loadFailedMessage: t('editMode.loadFailed'),
+    onTemplateLoaded: applyTemplateValues,
+  });
 
-  useEffect(() => {
-    if (!shakeId) return;
-    const tmr = window.setTimeout(() => setShakeId(null), 1400);
-    return () => window.clearTimeout(tmr);
-  }, [shakeId]);
-
-  useEffect(() => {
-    setBlockedHint(null);
-  }, [title, desc, prompt, category, tags]);
-
-  useEffect(() => {
-    const u = xImportUrl.trim();
-    const parsed = parseXStatusUrl(u);
-    if (!parsed) {
-      setXDuplicate(null);
-      return;
-    }
-    const fromUrl = authorHandleFromXUrl(u);
-    if (fromUrl) setAuthorHandle(fromUrl);
-    const ac = new AbortController();
-    const timer = window.setTimeout(() => {
-      void checkXSourceDuplicate({ locale, url: u, editId })
-        .then((result) => {
-          if (!ac.signal.aborted && result.ok) setXDuplicate(result.duplicate);
-        })
-        .catch(() => {
-          /* debounced check — ignore abort */
-        });
-    }, 450);
-    return () => {
-      window.clearTimeout(timer);
-      ac.abort();
-    };
-  }, [xImportUrl, locale, isEditMode, editId]);
+  const {
+    busy: xImportBusy,
+    error: xImportError,
+    succeeded: xImportOk,
+    duplicate: xDuplicate,
+    setDuplicate: setXDuplicate,
+    changeImportUrl,
+    changeSourceUrl,
+    runImport: runXImport,
+    resetFeedback: resetXImportFeedback,
+  } = useXImportWorkflow({
+    locale,
+    editId,
+    url: xImportUrl,
+    messages: {
+      notTweet: t('xImport.errorNotTweet'),
+      duplicate: t('xImport.errorDuplicate'),
+      generic: t('xImport.errorGeneric'),
+    },
+    onUrlChange: setXImportUrl,
+    onAuthorHandleChange: setAuthorHandle,
+    onImported: applyXImportValues,
+  });
 
   const xDuplicateStatusLabel = useCallback(
     (status: string) => {
@@ -192,52 +181,52 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
           ? submitPublicPath
           : submitChooserPath;
 
+  const requireAuthentication = useCallback(() => {
+    router.replace(loginHref(locale, authReturnPath));
+  }, [authReturnPath, locale, router]);
+
   useEffect(() => {
     if ((!isPrivateMode && !isEditMode) || authStatus !== 'unauthenticated') return;
-    router.replace(loginHref(locale, authReturnPath));
-  }, [isPrivateMode, isEditMode, authStatus, locale, router, authReturnPath]);
+    requireAuthentication();
+  }, [isPrivateMode, isEditMode, authStatus, requireAuthentication]);
 
-  const applyTemplateToForm = useCallback(
-    (item: TemplateRecord) => {
-      applyTemplateValues(templateToSubmitFormValues(item));
+  const {
+    submitting,
+    shakeId,
+    blockedHint,
+    submit: doSubmit,
+    clearBlockedHint,
+  } = useSubmitWorkflow({
+    locale,
+    editId,
+    isAuthenticated: authStatus === 'authenticated',
+    requiresAuthentication: isPrivateMode || isEditMode,
+    values: {
+      title,
+      description: desc,
+      prompt,
+      modelId,
+      category,
+      tags,
+      images: previewImageUrls,
+      sourceUrl: xImportUrl,
+      authorHandle,
+      visibility: saveVisibility,
     },
-    [applyTemplateValues],
-  );
-
-  const loadEditTemplate = useCallback(async () => {
-    if (!editId) return;
-    setLoadingTemplate(true);
-    setLoadError(null);
-    try {
-      const result = await loadTemplateForEdit(locale, editId);
-      if (!result.ok || !result.data.item) {
-        setLoadError(result.data.error ?? `HTTP ${result.status}`);
-        return;
-      }
-      applyTemplateToForm(result.data.item);
-    } catch {
-      setLoadError(t('editMode.loadFailed'));
-    } finally {
-      setLoadingTemplate(false);
-    }
-  }, [applyTemplateToForm, editId, locale, t]);
-
-  useEffect(() => {
-    if (!isEditMode || authStatus !== 'authenticated') return;
-    void loadEditTemplate();
-  }, [isEditMode, authStatus, loadEditTemplate]);
-
-  const shake = useCallback((id: string) => {
-    setShakeId(id);
-  }, []);
-
-  const focusField = useCallback((id: string) => {
-    const el = document.getElementById(id);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
-      window.setTimeout(() => el.focus(), 200);
-    }
-  }, []);
+    messages: {
+      needTitle: t('validation.needTitle'),
+      needPrompt: t('validation.needPrompt'),
+      needCategory: t('validation.needCategory'),
+      needTags: t('validation.needTags'),
+      submitUnavailable: t('validation.submitUnavailable'),
+      submitFailed: t('validation.submitFailed'),
+      duplicateBlocked: (duplicateTitle) =>
+        t('xImport.duplicateSubmitBlocked', { title: duplicateTitle }),
+    },
+    onAuthenticationRequired: requireAuthentication,
+    onDuplicate: setXDuplicate,
+    onSubmitted: markSubmitted,
+  });
 
   const promptLenOk = prompt.trim().length >= 10;
   const titleOk = title.trim().length > 0;
@@ -263,35 +252,6 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
       ? t(`categories.${category}`)
       : '';
   const tagsOk = tags.length >= 2 && tags.length <= 8;
-
-  const validateForm = () => {
-    if (!title.trim()) {
-      setBlockedHint(t('validation.needTitle'));
-      focusField('f-title');
-      shake('f-title');
-      return false;
-    }
-    if (!prompt.trim() || prompt.trim().length < 10) {
-      setBlockedHint(t('validation.needPrompt'));
-      focusField('f-prompt');
-      shake('f-prompt');
-      return false;
-    }
-    if (!categoryOk) {
-      setBlockedHint(t('validation.needCategory'));
-      focusField('f-category');
-      shake('f-category');
-      return false;
-    }
-    if (tags.length < 2 || tags.length > 8) {
-      setBlockedHint(t('validation.needTags'));
-      document.getElementById('op-tag-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      window.setTimeout(() => document.getElementById('tag-input')?.focus(), 200);
-      shake('tag-wrap');
-      return false;
-    }
-    return true;
-  };
 
   const onTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter' && e.key !== ',') return;
@@ -346,52 +306,6 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
     addImageUrl();
   };
 
-  const runXImport = useCallback(async () => {
-    setXImportError(null);
-    setXImportOk(false);
-    const u = xImportUrl.trim();
-    if (!u) return;
-    if (!parseXStatusUrl(u)) {
-      setXImportError(t('xImport.errorNotTweet'));
-      return;
-    }
-    const preHandle = authorHandleFromXUrl(u);
-    if (preHandle) setAuthorHandle(preHandle);
-    setXImportBusy(true);
-    try {
-      const result = await importTemplateFromX(locale, u);
-      const data = result.data;
-      if (result.status === 409 && data.error === 'duplicate_x_source' && data.duplicate) {
-        setXDuplicate(data.duplicate);
-        setXImportError(t('xImport.errorDuplicate'));
-        return;
-      }
-      if (!result.ok) {
-        setXImportError(data.error || t('xImport.errorGeneric'));
-        return;
-      }
-      applyXImportValues({
-        title: typeof data.title === 'string' ? data.title.slice(0, MAX_TITLE) : undefined,
-        description: typeof data.description === 'string' ? data.description.slice(0, 120) : undefined,
-        prompt: typeof data.prompt === 'string' ? data.prompt : undefined,
-        images: Array.isArray(data.imageUrls) ? data.imageUrls : undefined,
-        sourceUrl: typeof data.sourceUrl === 'string' ? data.sourceUrl : undefined,
-        authorHandle:
-          resolveXAuthorHandle({
-            sourceUrl: typeof data.sourceUrl === 'string' ? data.sourceUrl : u,
-            screenName:
-              typeof data.authorHandle === 'string' ? data.authorHandle.replace(/^@+/, '') : null,
-          }) || preHandle || '',
-      });
-      setXDuplicate(null);
-      setXImportOk(true);
-    } catch {
-      setXImportError(t('xImport.errorGeneric'));
-    } finally {
-      setXImportBusy(false);
-    }
-  }, [applyXImportValues, locale, setAuthorHandle, t, xImportUrl]);
-
   const copyPrompt = () => {
     if (!prompt) return;
     void navigator.clipboard.writeText(prompt).then(() => {
@@ -406,66 +320,14 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
     });
   };
 
-  const doSubmit = async () => {
-    if (!validateForm()) return;
-    setBlockedHint(null);
-    setSubmitting(true);
-    const payload = buildSubmitPayload({
-      title,
-      description: desc,
-      prompt,
-      modelId,
-      category,
-      tags,
-      images: previewImageUrls,
-      sourceUrl: xImportUrl,
-      authorHandle,
-      visibility: saveVisibility,
-    });
-    try {
-      const result = await saveSubmittedTemplate({
-        locale,
-        editId,
-        isAuthenticated: authStatus === 'authenticated',
-        payload,
-      });
-      const data = result.data;
-      if (!result.ok) {
-        if (result.status === 401 && (isPrivateMode || isEditMode)) {
-          router.replace(loginHref(locale, authReturnPath));
-          return;
-        }
-        if (result.status === 409 && data.error === 'duplicate_x_source' && data.duplicate) {
-          setXDuplicate(data.duplicate);
-          setBlockedHint(
-            t('xImport.duplicateSubmitBlocked', { title: data.duplicate.title }),
-          );
-          return;
-        }
-        if (result.status === 503) {
-          setBlockedHint(t('validation.submitUnavailable'));
-        } else {
-          setBlockedHint(typeof data.error === 'string' ? data.error : t('validation.submitFailed'));
-        }
-        return;
-      }
-      markSubmitted(data.item?.id ?? data.id ?? editId);
-    } catch {
-      setBlockedHint(t('validation.submitFailed'));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const resetForm = () => {
-    setBlockedHint(null);
+    clearBlockedHint();
     if (isEditMode) {
       void loadEditTemplate();
       return;
     }
     resetCreateForm();
-    setXImportError(null);
-    setXImportOk(false);
+    resetXImportFeedback();
   };
 
   const modelLabel = useMemo(() => t(`modelValues.${modelId}`), [t, modelId]);
@@ -565,12 +427,7 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
                           type="url"
                           inputMode="url"
                           value={xImportUrl}
-                          onChange={(e) => {
-                            setXImportUrl(e.target.value);
-                            setXImportError(null);
-                            setXImportOk(false);
-                            setXDuplicate(null);
-                          }}
+                          onChange={(e) => changeImportUrl(e.target.value)}
                           placeholder={t('xImport.placeholder')}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
@@ -604,10 +461,7 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
                           type="url"
                           inputMode="url"
                           value={xImportUrl}
-                          onChange={(e) => {
-                            setXImportUrl(e.target.value);
-                            setXDuplicate(null);
-                          }}
+                          onChange={(e) => changeSourceUrl(e.target.value)}
                           placeholder={t('placeholders.source')}
                         />
                         <p className="op-sp-label op-hint">{t('hints.source')}</p>
