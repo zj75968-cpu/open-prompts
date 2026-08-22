@@ -1,4 +1,7 @@
-import { LuMaximize2 } from 'react-icons/lu';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { LuCopy, LuMaximize2 } from 'react-icons/lu';
 import { CoverImage } from '~/components/prompt-gallery/CoverImage';
 import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { formatGalleryCardDate } from '~/lib/prompts/gallery-attribution';
@@ -15,6 +18,9 @@ type Props = {
   authorLabel?: string | null;
   authorUrl?: string | null;
   primaryCtaLabel?: string;
+  copyLabel?: string;
+  copiedLabel?: string;
+  onCopy?: () => boolean | Promise<boolean>;
   showModelBadge?: boolean;
   showDescription?: boolean;
   showTags?: boolean;
@@ -46,6 +52,9 @@ export function PromptGalleryCard({
   authorLabel,
   authorUrl,
   primaryCtaLabel,
+  copyLabel,
+  copiedLabel,
+  onCopy,
   showModelBadge = true,
   showDescription = true,
   showTags = true,
@@ -61,7 +70,16 @@ export function PromptGalleryCard({
   layout = 'columns',
   coverFit = 'contain',
 }: Props) {
+  const [copied, setCopied] = useState(false);
+  const showCopy = Boolean(onCopy && copyLabel?.trim() && copiedLabel?.trim());
   const showCta = Boolean(onCtaClick && primaryCtaLabel && primaryCtaLabel.trim().length > 0);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1200);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
   const dateLabel = formatGalleryCardDate(item.createdAt);
   const showFooterLeft = showAuthor && Boolean(authorLabel || dateLabel);
   const imageCount = item.images.filter((src) => src.trim()).length;
@@ -193,7 +211,7 @@ export function PromptGalleryCard({
           </div>
         ) : null}
 
-        {showFooterLeft || showCta ? (
+        {showFooterLeft || showCopy || showCta ? (
           <div className="mt-4 flex items-center justify-between">
             {showFooterLeft ? (
               <span className="text-[11px] text-[var(--text3)]">
@@ -220,17 +238,43 @@ export function PromptGalleryCard({
               <span />
             )}
 
-            {showCta ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCtaClick?.();
-                }}
-                className="relative z-[2] rounded-md bg-[var(--amber)] px-2.5 py-1 text-[11px] font-semibold text-[var(--bg)]"
-              >
-                {primaryCtaLabel}
-              </button>
+            {showCopy || showCta ? (
+              <div className="relative z-[2] flex items-center gap-1.5">
+                {showCopy ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void Promise.resolve()
+                        .then(() => onCopy?.())
+                        .then((success) => {
+                          if (success) setCopied(true);
+                        })
+                        .catch(() => {
+                          // Copy failures are intentionally non-disruptive on gallery cards.
+                        });
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--surface2)] px-2.5 py-1 text-[11px] font-semibold text-[var(--text2)] hover:border-[var(--border2)] hover:text-[var(--text)]"
+                    aria-label={copied ? copiedLabel : copyLabel}
+                    title={copied ? copiedLabel : copyLabel}
+                  >
+                    <LuCopy className="h-3 w-3" aria-hidden="true" />
+                    {copied ? copiedLabel : copyLabel}
+                  </button>
+                ) : null}
+                {showCta ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCtaClick?.();
+                    }}
+                    className="rounded-md bg-[var(--amber)] px-2.5 py-1 text-[11px] font-semibold text-[var(--bg)]"
+                  >
+                    {primaryCtaLabel}
+                  </button>
+                ) : null}
+              </div>
             ) : null}
           </div>
         ) : null}

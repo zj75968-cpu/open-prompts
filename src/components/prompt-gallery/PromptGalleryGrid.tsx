@@ -4,6 +4,7 @@ import '../../app/[locale]/gallery/gallery-page.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { copyTextToClipboard } from '~/lib/clipboard';
 import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { PromptGalleryCard } from '~/components/prompt-gallery/PromptGalleryCard';
 import { PromptGalleryMasonry } from '~/components/prompt-gallery/PromptGalleryMasonry';
@@ -222,6 +223,9 @@ export function PromptGalleryGrid({ locale, prompts, className }: Props) {
           authorLabel={getAuthorLabel(p)}
           authorUrl={getAuthorUrl(p) ?? null}
           primaryCtaLabel={t('card.generate')}
+          copyLabel={t('modal.copy')}
+          copiedLabel={t('modal.copied')}
+          onCopy={() => copyTextToClipboard(p.prompt)}
           coverErrorText={t('gallery.coverLoadFailed')}
           cardHref={promptHref(locale, p.id)}
           onMeta={({ width, height }) => rememberCoverMeta(p, width, height)}

@@ -34,6 +34,8 @@ export async function generateMetadata(
 type SearchParams = {
   model?: string;
   category?: string;
+  tag?: string;
+  q?: string;
 };
 
 export default async function GalleryPage(
@@ -51,10 +53,15 @@ export default async function GalleryPage(
 
   unstable_setRequestLocale(locale);
   const prompts = await getPromptGallery();
-  const initialModel = searchParams?.model?.trim() || undefined;
+  const requestedModel = searchParams?.model?.trim();
+  const initialModel = requestedModel && prompts.some((prompt) => prompt.model === requestedModel)
+    ? requestedModel
+    : undefined;
   const initialCategory = searchParams?.category
     ? normalizeSubmitCategoryKey(searchParams.category) ?? undefined
     : undefined;
+  const initialSubTag = initialCategory ? searchParams?.tag?.trim() || undefined : undefined;
+  const initialQuery = searchParams?.q?.trim() || undefined;
 
   return (
     <PageComponent
@@ -62,6 +69,8 @@ export default async function GalleryPage(
       prompts={prompts}
       initialModel={initialModel}
       initialCategory={initialCategory}
+      initialSubTag={initialSubTag}
+      initialQuery={initialQuery}
     />
   );
 }

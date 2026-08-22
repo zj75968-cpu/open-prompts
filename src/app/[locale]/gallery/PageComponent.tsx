@@ -2,7 +2,8 @@
 
 import './gallery-page.css';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { copyTextToClipboard } from '~/lib/clipboard';
 import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { PromptGalleryCard } from '~/components/prompt-gallery/PromptGalleryCard';
 import { GalleryFilterStrip } from '~/components/prompt-gallery/GalleryFilterStrip';
@@ -16,12 +17,22 @@ import {
   type CoverDimensions,
 } from '~/lib/prompts/preload-cover-dimensions';
 import { useTranslations } from 'next-intl';
+import {
+  mergeCategoryTags,
+  normalizeSubmitCategoryKey,
+  promptMatchesGalleryFilter,
+  type SubmitCategoryKey,
+} from '~/lib/prompts/prompt-categories';
+import { promptHref } from '~/lib/prompts/seo-paths';
+import { formatSubTagLabel } from '~/lib/prompts/sub-tag-i18n';
 
 type Props = {
   locale: string;
   prompts: PromptGalleryItem[];
   initialModel?: string;
   initialCategory?: SubmitCategoryKey;
+  initialSubTag?: string;
+  initialQuery?: string;
 };
 
 const PAGE_SIZE = 18;
@@ -35,24 +46,46 @@ function uniq<T>(arr: T[]) {
   return Array.from(new Set(arr));
 }
 
-import {
-  mergeCategoryTags,
-  promptMatchesGalleryFilter,
-  type SubmitCategoryKey,
-} from '~/lib/prompts/prompt-categories';
-import { promptHref } from '~/lib/prompts/seo-paths';
-import { formatSubTagLabel } from '~/lib/prompts/sub-tag-i18n';
+type GalleryUrlFilters = {
+  model: string;
+  category: 'all' | SubmitCategoryKey;
+  tag: string | null;
+  query: string;
+};
+
+function setOptionalParam(params: URLSearchParams, key: string, value?: string | null) {
+  const normalized = value?.trim();
+  if (normalized) params.set(key, normalized);
+  else params.delete(key);
+}
+
+function applyGalleryFiltersToParams(
+  source: string,
+  filters: GalleryUrlFilters,
+): URLSearchParams {
+  const params = new URLSearchParams(source);
+  setOptionalParam(params, 'model', filters.model === 'all' ? null : filters.model);
+  setOptionalParam(params, 'category', filters.category === 'all' ? null : filters.category);
+  setOptionalParam(params, 'tag', filters.category === 'all' ? null : filters.tag);
+  setOptionalParam(params, 'q', filters.query);
+  return params;
+}
 
 export default function PageComponent({
   locale,
   prompts,
   initialModel,
   initialCategory,
+  initialSubTag,
+  initialQuery,
 }: Props) {
   const t = useTranslations('OpenPrompts');
   const tSubmit = useTranslations('OpenPrompts.submitPage');
   const router = useRouter();
-  const [query, setQuery] = useState('');
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchString = searchParams.toString();
+  const [query, setQuery] = useState(initialQuery ?? '');
   const [model, setModel] = useState<string>(() => {
     if (!initialModel) return 'all';
     return prompts.some((p) => p.model === initialModel) ? initialModel : 'all';
@@ -60,7 +93,7 @@ export default function PageComponent({
   const [categoryId, setCategoryId] = useState<'all' | SubmitCategoryKey>(() =>
     initialCategory ?? 'all',
   );
-  const [subTag, setSubTag] = useState<string | null>(null);
+  const [subTag, setSubTag] = useState<string | null>(initialCategory ? initialSubTag ?? null : null);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [autoLoading, setAutoLoading] = useState(false);
   const [enteringDelays, setEnteringDelays] = useState<Map<string, number>>(() => new Map());
@@ -72,6 +105,45 @@ export default function PageComponent({
     () => ['all', ...uniq(prompts.map((p) => p.model)).sort((a, b) => a.localeCompare(b))],
     [prompts],
   );
+
+  const replaceUrlFilters = useCallback(
+    (filters: GalleryUrlFilters) => {
+      const nextParams = applyGalleryFiltersToParams(searchString, filters);
+      const nextSearch = nextParams.toString();
+      if (nextSearch === searchString) return;
+      router.replace(nextSearch ? `${pathname}?${nextSearch}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchString],
+  );
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    const requestedModel = params.get('model')?.trim() ?? '';
+    const nextModel = prompts.some((prompt) => prompt.model === requestedModel)
+      ? requestedModel
+      : 'all';
+    const nextCategory = normalizeSubmitCategoryKey(params.get('category')?.trim() ?? '') ?? 'all';
+    const nextSubTag = nextCategory === 'all' ? null : params.get('tag')?.trim() || null;
+    const nextQuery = params.get('q')?.trim() ?? '';
+
+    setModel(nextModel);
+    setCategoryId(nextCategory);
+    setSubTag(nextSubTag);
+    setQuery(nextQuery);
+    setLimit(PAGE_SIZE);
+
+    const canonicalParams = applyGalleryFiltersToParams(searchString, {
+      model: nextModel,
+      category: nextCategory,
+      tag: nextSubTag,
+      query: nextQuery,
+    });
+    const canonicalSearch = canonicalParams.toString();
+    if (canonicalSearch !== searchString) {
+      router.replace(canonicalSearch ? `${pathname}?${canonicalSearch}` : pathname, { scroll: false });
+    }
+  }, [pathname, prompts, router, searchString]);
+
   const subTags = useMemo(() => {
     if (categoryId === 'all') return [];
     return mergeCategoryTags(categoryId, prompts);
@@ -110,17 +182,27 @@ export default function PageComponent({
   const handleModelChange = (next: string) => {
     setModel(next);
     resetPagination();
+    replaceUrlFilters({ model: next, category: categoryId, tag: subTag, query });
   };
 
   const handleCategoryChange = (next: 'all' | SubmitCategoryKey) => {
     setCategoryId(next);
     resetPagination();
     setSubTag(null);
+    replaceUrlFilters({ model, category: next, tag: null, query });
   };
 
   const handleSubTagChange = (next: string) => {
-    setSubTag((prev) => (prev === next ? null : next));
+    const nextSubTag = subTag === next ? null : next;
+    setSubTag(nextSubTag);
     resetPagination();
+    replaceUrlFilters({ model, category: categoryId, tag: nextSubTag, query });
+  };
+
+  const handleQueryChange = (next: string) => {
+    setQuery(next);
+    resetPagination();
+    replaceUrlFilters({ model, category: categoryId, tag: subTag, query: next });
   };
 
   const visible = useMemo(() => filtered.slice(0, limit), [filtered, limit]);
@@ -368,6 +450,9 @@ export default function PageComponent({
           authorLabel={getAuthorLabel(p)}
           authorUrl={getAuthorUrl(p) ?? null}
           primaryCtaLabel={t('card.generate')}
+          copyLabel={t('modal.copy')}
+          copiedLabel={t('modal.copied')}
+          onCopy={() => copyTextToClipboard(p.prompt)}
           coverErrorText={t('gallery.coverLoadFailed')}
           cardHref={promptHref(locale, p.id)}
           onMeta={({ width, height }) => rememberCoverMeta(p, width, height)}
@@ -397,10 +482,7 @@ export default function PageComponent({
                 <div className="flex max-w-md flex-1 overflow-hidden rounded-xl border border-[var(--border2)] bg-[var(--surface)] sm:max-w-sm">
                   <input
                     value={query}
-                    onChange={(e) => {
-                      setQuery(e.target.value);
-                      resetPagination();
-                    }}
+                    onChange={(e) => handleQueryChange(e.target.value)}
                     placeholder={t('hero.searchPlaceholder')}
                     className="w-full bg-transparent px-4 py-2.5 text-sm text-[var(--text)] outline-none placeholder:text-[var(--text3)]"
                   />

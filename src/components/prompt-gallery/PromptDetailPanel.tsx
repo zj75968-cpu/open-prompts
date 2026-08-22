@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { CoverImage } from '~/components/prompt-gallery/CoverImage';
+import { copyTextToClipboard } from '~/lib/clipboard';
 import { galleryAuthorLabel } from '~/lib/prompts/gallery-attribution';
 import type { PromptDetailItem } from '~/lib/prompts/prompt-model';
 
@@ -52,26 +53,7 @@ export function PromptDetailPanel({
       : `/${locale}/create?template=${encodeURIComponent(item.id)}`;
 
   const copyPrompt = async () => {
-    const text = item.prompt ?? '';
-    try {
-      await navigator.clipboard.writeText(text);
-      setPromptCopied(true);
-    } catch {
-      try {
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        setPromptCopied(true);
-      } catch {
-        // no-op
-      }
-    }
+    if (await copyTextToClipboard(item.prompt ?? '')) setPromptCopied(true);
   };
 
   const shellClass =
