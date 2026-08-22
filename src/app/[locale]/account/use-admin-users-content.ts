@@ -1,11 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AdminUserDetail, AdminUserSummary } from '~/lib/users/admin-user-record';
 import type { AdminUserTrendRange, DailyCountPoint } from '~/lib/users/admin-user-trend';
-import { openAdminUserDetailAction, type AccountTranslateFn } from './account-actions';
-import { loadAdminUsersPage } from './account-api';
-import type { AccountPanel } from './account-types';
+import type { AccountTranslateFn } from './account-actions';
+import { loadAdminUserDetail, loadAdminUsersPage } from './account-api';
 
 export type AdminUsersContentState = {
   userItems: AdminUserSummary[];
@@ -36,10 +35,12 @@ type AdminUsersQuery = {
 export function useAdminUsersContent(args: {
   locale: string;
   isAdmin: boolean;
-  panel: AccountPanel;
+  active: boolean;
   t: AccountTranslateFn;
   query: AdminUsersQuery;
 }): AdminUsersContentState {
+  const loadGenerationRef = useRef(0);
+  const detailGenerationRef = useRef(0);
   const [userItems, setUserItems] = useState<AdminUserSummary[]>([]);
   const [usersTotal, setUsersTotal] = useState<number | null>(null);
   const [usersPlatformTotal, setUsersPlatformTotal] = useState<number | null>(null);
@@ -65,6 +66,7 @@ export function useAdminUsersContent(args: {
   }, []);
 
   const loadAdminUsers = useCallback(async () => {
+    const generation = ++loadGenerationRef.current;
     setUsersLoading(true);
     setUsersLoadError(null);
 
@@ -79,6 +81,7 @@ export function useAdminUsersContent(args: {
         trendDays: args.query.trendDays,
         signal: abortController.signal,
       });
+      if (generation !== loadGenerationRef.current) return;
 
       if (result.ok) {
         setUserItems(result.data.items);
@@ -96,6 +99,7 @@ export function useAdminUsersContent(args: {
       clearUsers();
       setUsersLoadError(result.error ?? `HTTP ${result.status}`);
     } catch (error: unknown) {
+      if (generation !== loadGenerationRef.current) return;
       clearUsers();
       const message = error instanceof Error ? error.message : 'Network error';
       setUsersLoadError(
@@ -105,7 +109,7 @@ export function useAdminUsersContent(args: {
       );
     } finally {
       window.clearTimeout(timeoutId);
-      setUsersLoading(false);
+      if (generation === loadGenerationRef.current) setUsersLoading(false);
     }
   }, [
     args.locale,
@@ -118,29 +122,37 @@ export function useAdminUsersContent(args: {
   ]);
 
   useEffect(() => {
-    if (args.panel === 'users' && args.isAdmin) void loadAdminUsers();
-  }, [args.isAdmin, args.panel, loadAdminUsers]);
+    if (args.active && args.isAdmin) void loadAdminUsers();
+  }, [args.active, args.isAdmin, loadAdminUsers]);
 
   const openUserDetail = useCallback(
     async (summary: AdminUserSummary) => {
-      await openAdminUserDetailAction({
-        locale: args.locale,
-        id: summary.id,
-        setDetailState: {
-          setOpen: setUserDetailOpen,
-          setItem: setUserDetail,
-          setError: setUserDetailError,
-          setLoading: setUserDetailLoading,
-        },
-      });
+      const generation = ++detailGenerationRef.current;
+      setUserDetailOpen(true);
+      setUserDetail(null);
+      setUserDetailError(null);
+      setUserDetailLoading(true);
+      try {
+        const result = await loadAdminUserDetail(args.locale, summary.id);
+        if (generation !== detailGenerationRef.current) return;
+        if (result.item) setUserDetail(result.item);
+        else setUserDetailError(result.error ?? 'Load failed');
+      } catch (error: unknown) {
+        if (generation !== detailGenerationRef.current) return;
+        setUserDetailError(error instanceof Error ? error.message : 'Network error');
+      } finally {
+        if (generation === detailGenerationRef.current) setUserDetailLoading(false);
+      }
     },
     [args.locale],
   );
 
   const closeUserDetail = useCallback(() => {
+    detailGenerationRef.current += 1;
     setUserDetailOpen(false);
     setUserDetail(null);
     setUserDetailError(null);
+    setUserDetailLoading(false);
   }, []);
 
   return {

@@ -11,7 +11,6 @@ import {
   type AccountTranslateFn,
 } from './account-actions';
 import { loadAdminTemplatesBadge, loadAdminTemplatesPage } from './account-api';
-import type { AccountPanel } from './account-types';
 
 export type InitialAdminTemplates = {
   items: AdminTemplateRecord[];
@@ -51,13 +50,14 @@ type AdminTemplatesSelection = {
 export function useAdminTemplatesContent(args: {
   locale: string;
   isAdmin: boolean;
-  panel: AccountPanel;
+  active: boolean;
   userEmail: string;
   t: AccountTranslateFn;
   initial?: InitialAdminTemplates | null;
   query: AdminTemplatesQuery;
   selection: AdminTemplatesSelection;
   refreshOverview: AccountReloadFn;
+  onPendingCountChange?: (count: number | null) => void;
 }): AdminTemplatesContentState {
   const loadGenerationRef = useRef(0);
   const itemsCountRef = useRef(args.initial?.items.length ?? 0);
@@ -165,13 +165,17 @@ export function useAdminTemplatesContent(args: {
   }, [args.isAdmin, args.locale]);
 
   useEffect(() => {
-    if (args.panel !== 'admin' || !args.isAdmin) return;
+    args.onPendingCountChange?.(adminPendingCount);
+  }, [adminPendingCount, args.onPendingCountChange]);
+
+  useEffect(() => {
+    if (!args.active || !args.isAdmin) return;
     if (prefetchedRef.current) {
       prefetchedRef.current = false;
       return;
     }
     void loadAdminTemplates();
-  }, [args.isAdmin, args.panel, loadAdminTemplates]);
+  }, [args.active, args.isAdmin, loadAdminTemplates]);
 
   const review = useCallback(
     async (id: number, status: 'approved' | 'rejected') => {
@@ -181,7 +185,7 @@ export function useAdminTemplatesContent(args: {
         status,
         setSelectedAdminIds: args.selection.setSelectedIds,
         loadAdminTemplates,
-        loadStats: args.refreshOverview,
+        refreshOverview: args.refreshOverview,
       });
     },
     [
@@ -203,7 +207,7 @@ export function useAdminTemplatesContent(args: {
         status,
         setSelectedAdminIds: args.selection.setSelectedIds,
         loadAdminTemplates,
-        loadStats: args.refreshOverview,
+        refreshOverview: args.refreshOverview,
         setBusy: setBulkReviewBusy,
       });
     },

@@ -6,21 +6,18 @@ import type { TemplateRecord } from '~/lib/prompts/template-types';
 import {
   bulkDeleteMyTemplatesAction,
   removeMyTemplateAction,
+  type AccountReloadFn,
   type AccountSelectionUpdater,
   type AccountTranslateFn,
 } from './account-actions';
-import { loadMyTemplatesPage, loadMyTemplatesStats } from './account-api';
-import type { AccountPanel } from './account-types';
+import { loadMyTemplatesPage } from './account-api';
 
 export type MyTemplatesContentState = {
   templates: TemplateRecord[];
-  templateCount: number | null;
-  myPendingCount: number | null;
   myLoading: boolean;
   myTotal: number | null;
   myHasMore: boolean;
   bulkMyDeleteBusy: boolean;
-  loadStats: () => Promise<void>;
   loadMyTemplates: () => Promise<void>;
   removeTemplate: (id: number) => Promise<void>;
   bulkDeleteMyTemplates: () => Promise<void>;
@@ -40,32 +37,20 @@ type MyTemplatesSelection = {
 
 export function useMyTemplatesContent(args: {
   locale: string;
-  panel: AccountPanel;
+  active: boolean;
   t: AccountTranslateFn;
   query: MyTemplatesQuery;
   selection: MyTemplatesSelection;
+  refreshOverview: AccountReloadFn;
 }): MyTemplatesContentState {
   const loadGenerationRef = useRef(0);
   const prefetchRef = useRef<{ key: string; data: MyTemplatesPage } | null>(null);
 
   const [templates, setTemplates] = useState<TemplateRecord[]>([]);
-  const [templateCount, setTemplateCount] = useState<number | null>(null);
-  const [myPendingCount, setMyPendingCount] = useState<number | null>(null);
   const [myLoading, setMyLoading] = useState(false);
   const [myTotal, setMyTotal] = useState<number | null>(null);
   const [myHasMore, setMyHasMore] = useState(false);
   const [bulkMyDeleteBusy, setBulkMyDeleteBusy] = useState(false);
-
-  const loadStats = useCallback(async () => {
-    try {
-      const stats = await loadMyTemplatesStats(args.locale);
-      setTemplateCount(stats.templateCount);
-      setMyPendingCount(stats.pendingCount);
-    } catch {
-      setTemplateCount(null);
-      setMyPendingCount(null);
-    }
-  }, [args.locale]);
 
   const prefetchPage = useCallback(
     async (page: number, generation: number) => {
@@ -157,12 +142,8 @@ export function useMyTemplatesContent(args: {
   }, [args.query.pageSize, args.query.search, args.query.statusFilter]);
 
   useEffect(() => {
-    if (args.panel === 'overview') void loadStats();
-  }, [args.panel, loadStats]);
-
-  useEffect(() => {
-    if (args.panel === 'prompts') void loadMyTemplates();
-  }, [args.panel, loadMyTemplates]);
+    if (args.active) void loadMyTemplates();
+  }, [args.active, loadMyTemplates]);
 
   const removeTemplate = useCallback(
     async (id: number) => {
@@ -175,10 +156,16 @@ export function useMyTemplatesContent(args: {
           prefetchRef.current = null;
         },
         loadMyTemplates,
-        loadStats,
+        refreshOverview: args.refreshOverview,
       });
     },
-    [args.locale, args.selection.setSelectedIds, args.t, loadMyTemplates, loadStats],
+    [
+      args.locale,
+      args.refreshOverview,
+      args.selection.setSelectedIds,
+      args.t,
+      loadMyTemplates,
+    ],
   );
 
   const bulkDeleteMyTemplates = useCallback(async () => {
@@ -193,27 +180,24 @@ export function useMyTemplatesContent(args: {
         prefetchRef.current = null;
       },
       loadMyTemplates,
-      loadStats,
+      refreshOverview: args.refreshOverview,
       setBusy: setBulkMyDeleteBusy,
     });
   }, [
     args.locale,
+    args.refreshOverview,
     args.selection.selectedIds,
     args.selection.setSelectedIds,
     args.t,
     loadMyTemplates,
-    loadStats,
   ]);
 
   return {
     templates,
-    templateCount,
-    myPendingCount,
     myLoading,
     myTotal,
     myHasMore,
     bulkMyDeleteBusy,
-    loadStats,
     loadMyTemplates,
     removeTemplate,
     bulkDeleteMyTemplates,

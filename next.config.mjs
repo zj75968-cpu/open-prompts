@@ -61,4 +61,6 @@ export default withNextIntl(nextConfig);
 // Enable Cloudflare bindings (env vars, etc.) during `next dev`.
 // No-op in production builds; only runs in the dev process.
 import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
-initOpenNextCloudflareForDev();
+if (process.env.OPEN_PROMPTS_SKIP_CLOUDFLARE_DEV !== '1') {
+    initOpenNextCloudflareForDev();
+}
