@@ -1,7 +1,7 @@
 import { and, count, desc, eq, gte, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
 import type { Db } from '~/db/client';
 import { accounts, prompts, users } from '~/db/schema';
-import { getAdminEmails } from '~/lib/auth/session';
+import { getAdminEmails } from '~/lib/auth/admin-emails';
 import { startOfUtcDay } from '~/lib/users/touch-user-activity';
 import {
   type AdminDailyTrendPoint,

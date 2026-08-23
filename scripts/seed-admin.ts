@@ -8,7 +8,7 @@ import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../src/db/schema';
-import { getAdminEmails } from '../src/lib/auth/session';
+import { getAdminEmails } from '../src/lib/auth/admin-emails';
 
 config({ path: '.env.local' });
 config({ path: '.env' });
@@ -47,7 +47,7 @@ async function main() {
           updatedAt: new Date(),
         })
         .where(eq(schema.users.email, email));
-      console.log(`Updated admin user: ${email}`);
+      console.log('Updated configured admin user');
     } else {
       await db.insert(schema.users).values({
         email,
@@ -55,7 +55,7 @@ async function main() {
         passwordHash,
         emailVerified: new Date(),
       });
-      console.log(`Created admin user: ${email}`);
+      console.log('Created configured admin user');
     }
   }
 

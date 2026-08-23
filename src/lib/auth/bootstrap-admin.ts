@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import { getDb } from '~/db/client';
 import { users } from '~/db/schema';
-import { getAdminEmails } from '~/lib/auth/session';
+import { getAdminEmails } from '~/lib/auth/admin-emails';
 
 /**
  * Ensures each `ADMIN_EMAIL` has a credentials password matching `ADMIN_PASSWORD`.
@@ -48,7 +48,7 @@ export async function bootstrapAdminIfConfigured(): Promise<void> {
           updatedAt: new Date(),
         })
         .where(eq(users.email, email));
-      console.info('[bootstrap-admin] Synced admin credentials for:', email);
+      console.info('[bootstrap-admin] Synced configured admin credentials.');
       continue;
     }
 
@@ -58,6 +58,6 @@ export async function bootstrapAdminIfConfigured(): Promise<void> {
       passwordHash,
       emailVerified: new Date(),
     });
-    console.info('[bootstrap-admin] Created admin user:', email);
+    console.info('[bootstrap-admin] Created configured admin user.');
   }
 }

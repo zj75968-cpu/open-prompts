@@ -6,7 +6,8 @@ import type {
   PromptWriteRequestDto,
 } from '~/lib/prompts/prompt-dto';
 import { getDb } from '~/db/client';
-import { isAdminEmail, requireAuthSession } from '~/lib/auth/session';
+import { isAdminEmail } from '~/lib/auth/admin-emails';
+import { requireAuthSession } from '~/lib/auth/session';
 import { parseTemplateBody } from '~/lib/prompts/parse-template-body';
 import {
   deleteUserTemplate,

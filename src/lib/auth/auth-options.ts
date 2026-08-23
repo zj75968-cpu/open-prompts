@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { getDb } from '~/db/client';
 import { users } from '~/db/schema';
 import { hasCustomProfileImage } from '~/lib/auth/default-user-avatar';
-import { isAdminEmail } from '~/lib/auth/session';
+import { isAdminEmail } from '~/lib/auth/admin-emails';
 import { bootstrapAdminIfConfigured } from '~/lib/auth/bootstrap-admin';
 import { buildOAuthProviders } from '~/lib/auth/oauth-providers';
 import { ensureOAuthUser } from '~/lib/auth/sync-oauth-user';
