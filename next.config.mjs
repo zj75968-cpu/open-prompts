@@ -4,6 +4,7 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    output: 'standalone',
     // Pin the file-tracing root to this project (a stray ~/package-lock.json otherwise
     // makes Next infer the wrong workspace root, which breaks the OpenNext bundle).
     outputFileTracingRoot: new URL('.', import.meta.url).pathname,
