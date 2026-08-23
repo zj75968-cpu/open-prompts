@@ -14,12 +14,8 @@ export const config = {
     // Enable a redirect to a matching locale at the root
     '/',
 
-    // Set a cookie to remember the previous locale for
-    // all requests that have a locale prefix
-    '/(en|zh|ja)/:path*',
-
-    // Enable redirects that add missing locales
-    // (e.g. `/pathnames` -> `/en/pathnames`)
-    '/((?!api|_next|_vercel|.*\\..*).*)'
+    // Apply locale handling to pages, but let both root and locale-scoped APIs
+    // reach their Route Handlers directly without an internal proxy rewrite.
+    '/((?!api|en/api|zh/api|ja/api|_next|_vercel|.*\\..*).*)'
   ]
 };
