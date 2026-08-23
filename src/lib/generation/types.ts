@@ -12,6 +12,7 @@ export type GenerationCreateParams = {
 export type GenerationCreateResult = {
   providerJobId: string;
   status: GenerationStatus;
+  images?: string[];
 };
 
 export type GenerationPollResult = {

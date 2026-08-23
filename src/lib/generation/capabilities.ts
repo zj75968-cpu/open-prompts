@@ -12,10 +12,7 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapabilities> = {
     aspectRatios: ['1:1', '2:1', '16:9', '3:2', '4:3', '5:4', '9:16', '3:4', '2:3', '4:5'],
     qualities: ['1k', '2k', '4k'],
     maxCount: 4,
-    models: [
-      { label: 'GPT Image 2', value: 'GPT Image 2' },
-      { label: 'Nano Banana 2', value: 'openai/nano-banana-2/text-to-image' },
-    ],
+    models: [{ label: 'GPT Image 2', value: 'gpt-image-2' }],
   },
   atlascloud: {
     aspectRatios: ['1:1', '2:1', '16:9', '3:2', '4:3', '5:4', '9:16', '3:4', '2:3', '4:5'],
@@ -26,6 +23,12 @@ export const PROVIDER_CAPABILITIES: Record<string, ProviderCapabilities> = {
       // AtlasCloud expects a model slug for non-default models.
       { label: 'Nano Banana 2', value: 'openai/nano-banana-2/text-to-image' },
     ],
+  },
+  'openai-compatible': {
+    aspectRatios: ['1:1', '3:2', '2:3'],
+    qualities: ['1k', '2k', '4k'],
+    maxCount: 4,
+    models: [{ label: 'GPT Image 2', value: 'gpt-image-2' }],
   },
   replicate: {
     aspectRatios: ['1:1', '2:1', '16:9', '3:2', '4:3', '5:4', '9:16', '3:4', '2:3', '4:5'],

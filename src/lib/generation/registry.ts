@@ -1,5 +1,6 @@
 import type { ImageGenerationProvider } from '~/lib/generation/types';
 import { createAtlascloudProvider } from '~/lib/generation/providers/atlascloud';
+import { createOpenAICompatibleProvider } from '~/lib/generation/providers/openai-compatible';
 import { createReplicateProvider } from '~/lib/generation/providers/replicate';
 
 let cached: Record<string, ImageGenerationProvider> | null = null;
@@ -11,6 +12,11 @@ export function getProviderRegistry(): Record<string, ImageGenerationProvider> {
   // instantiate lazily but at module load time for simplicity
   try {
     providers.atlascloud = createAtlascloudProvider();
+  } catch {
+    // optional in some envs
+  }
+  try {
+    providers['openai-compatible'] = createOpenAICompatibleProvider();
   } catch {
     // optional in some envs
   }

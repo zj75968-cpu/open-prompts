@@ -149,6 +149,9 @@ export function GenerateModal({ open, onClose, locale, item }: Props) {
       }
       setProviderJobId(response.data.providerJobId);
       setUiState(response.data.status || 'queued');
+      if (response.data.status === 'succeeded') {
+        setImages(Array.isArray(response.data.images) ? response.data.images : []);
+      }
     } catch (e: any) {
       setUiState('failed');
       setError(e?.message || t('gen.createFailed'));

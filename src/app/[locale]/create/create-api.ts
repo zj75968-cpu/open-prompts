@@ -22,6 +22,7 @@ export type CreateGenerationRequest = Required<
 export type CreateGenerationResponse = {
   providerJobId: string | null;
   status: GenerationUiState;
+  images: string[];
 };
 
 export type PollGenerationResponse = {
@@ -71,6 +72,7 @@ export async function createGeneration(
   return {
     providerJobId: response.data.providerJobId || null,
     status: normalizeStatus(response.data.status, 'queued'),
+    images: Array.isArray(response.data.images) ? response.data.images : [],
   };
 }
 

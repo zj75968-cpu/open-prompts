@@ -75,6 +75,9 @@ export function useGenerationJob({
         });
         setProviderJobId(result.providerJobId);
         setUiState(result.status);
+        if (result.status === 'succeeded') {
+          setImages(result.images);
+        }
       } catch (e: unknown) {
         setUiState('failed');
         setError(getErrorMessage(e, messages.createFailed));

@@ -12,6 +12,7 @@ export type GenerationCreateResponseDto = {
   provider: string;
   providerJobId: string;
   status: GenerationStatus;
+  images?: string[];
 };
 
 export type GenerationPollResponseDto = {

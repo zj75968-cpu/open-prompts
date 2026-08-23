@@ -174,6 +174,7 @@ export async function createGeneration(
           result.providerJobId,
         ),
         status: result.status,
+        images: result.images,
       },
     };
   } catch (error: unknown) {
