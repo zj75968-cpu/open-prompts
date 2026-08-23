@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+import type {
+  AdminTemplatesPageResponseDto,
+  AdminTemplatesQueryDto,
+} from '~/lib/account/account-dto';
 import { getDb } from '~/db/client';
 import { requireAdminSession } from '~/lib/auth/session';
 import {
@@ -22,16 +26,27 @@ export async function GET(req: Request) {
   if (!db) return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
 
   const url = new URL(req.url);
-  const q = url.searchParams.get('q') ?? undefined;
-  const status = parseReviewStatus(url.searchParams.get('status') ?? '') ?? undefined;
-  const visibility = parseVisibility(url.searchParams.get('visibility') ?? '') ?? undefined;
-  const limit = Number(url.searchParams.get('limit') ?? 50);
-  const offset = Number(url.searchParams.get('offset') ?? 0);
-  const trendDays = normalizeTrendDays(url.searchParams.get('trendDays'));
+  const query: AdminTemplatesQueryDto = {
+    q: url.searchParams.get('q') ?? undefined,
+    status: url.searchParams.get('status') ?? undefined,
+    visibility: url.searchParams.get('visibility') ?? undefined,
+    limit: Number(url.searchParams.get('limit') ?? 50),
+    offset: Number(url.searchParams.get('offset') ?? 0),
+    trendDays: normalizeTrendDays(url.searchParams.get('trendDays')),
+  };
+  const status = parseReviewStatus(query.status ?? '') ?? undefined;
+  const visibility = parseVisibility(query.visibility ?? '') ?? undefined;
+  const trendDays = query.trendDays ?? 30;
 
   try {
     const [result, pendingCount] = await Promise.all([
-      listTemplatesForAdmin(db, { q, status, visibility, limit, offset }),
+      listTemplatesForAdmin(db, {
+        q: query.q,
+        status,
+        visibility,
+        limit: query.limit,
+        offset: query.offset,
+      }),
       countPendingReview(db),
     ]);
     let promptsDailyTrend: Awaited<ReturnType<typeof getPromptDailyTrend>> = [];
@@ -40,7 +55,13 @@ export async function GET(req: Request) {
     } catch (trendErr) {
       console.error('[admin/templates GET:trend]', trendErr);
     }
-    return NextResponse.json({ ...result, pendingCount, trendDays, promptsDailyTrend });
+    const response: AdminTemplatesPageResponseDto = {
+      ...result,
+      pendingCount,
+      trendDays,
+      promptsDailyTrend,
+    };
+    return NextResponse.json(response);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'List failed';
     console.error('[admin/templates GET]', e);

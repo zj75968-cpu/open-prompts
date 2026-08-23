@@ -17,11 +17,7 @@ export function useSubmitFormState() {
   const [prompt, setPrompt] = useState('');
   const [category, setCategory] = useState<SubmitCategoryKey | ''>('');
   const [tags, setTags] = useState<string[]>(['Cinematic', 'Portrait']);
-  const [tagInput, setTagInput] = useState('');
   const [resultImages, setResultImages] = useState<string[]>([]);
-  const [urlDraft, setUrlDraft] = useState('');
-  const [urlError, setUrlError] = useState<string | null>(null);
-  const [uploadDrag, setUploadDrag] = useState(false);
   const [xImportUrl, setXImportUrl] = useState('');
   const [authorHandle, setAuthorHandle] = useState('');
   const [success, setSuccess] = useState(false);
@@ -31,6 +27,7 @@ export function useSubmitFormState() {
   const imagesFull = resultImages.length >= MAX_RESULT_IMAGES;
 
   const applyTemplateValues = useCallback((values: SubmitFormValues) => {
+    setSuccess(false);
     setTitle(values.title);
     setDesc(values.description);
     setPrompt(values.prompt);
@@ -44,22 +41,19 @@ export function useSubmitFormState() {
     setSubmissionId(values.submissionId);
   }, []);
 
-  const applyXImportValues = useCallback(
-    (values: XImportFormValues) => {
-      if (typeof values.title === 'string') setTitle(values.title);
-      if (typeof values.description === 'string') setDesc(values.description);
-      if (typeof values.prompt === 'string') setPrompt(values.prompt);
-      if (Array.isArray(values.images) && values.images.length > 0) {
-        const imported = values.images.filter(isValidImageSrc).slice(0, MAX_RESULT_IMAGES);
-        if (imported.length > 0) setResultImages(imported);
-      }
-      if (typeof values.sourceUrl === 'string' && values.sourceUrl.trim()) {
-        setXImportUrl(values.sourceUrl.trim());
-      }
-      if (typeof values.authorHandle === 'string') setAuthorHandle(values.authorHandle);
-    },
-    [],
-  );
+  const applyXImportValues = useCallback((values: XImportFormValues) => {
+    if (typeof values.title === 'string') setTitle(values.title);
+    if (typeof values.description === 'string') setDesc(values.description);
+    if (typeof values.prompt === 'string') setPrompt(values.prompt);
+    if (Array.isArray(values.images) && values.images.length > 0) {
+      const imported = values.images.filter(isValidImageSrc).slice(0, MAX_RESULT_IMAGES);
+      if (imported.length > 0) setResultImages(imported);
+    }
+    if (typeof values.sourceUrl === 'string' && values.sourceUrl.trim()) {
+      setXImportUrl(values.sourceUrl.trim());
+    }
+    if (typeof values.authorHandle === 'string') setAuthorHandle(values.authorHandle);
+  }, []);
 
   const markSubmitted = useCallback((id?: string | number | null) => {
     setSuccess(true);
@@ -88,7 +82,6 @@ export function useSubmitFormState() {
 
   const removeImage = useCallback((index: number) => {
     setResultImages((current) => current.filter((_, idx) => idx !== index));
-    setUrlError(null);
   }, []);
 
   const resetCreateForm = useCallback(() => {
@@ -99,17 +92,13 @@ export function useSubmitFormState() {
     setPrompt('');
     setCategory('');
     setTags(['Cinematic', 'Portrait']);
-    setTagInput('');
     setResultImages([]);
-    setUrlDraft('');
-    setUrlError(null);
     setXImportUrl('');
     setAuthorHandle('');
   }, []);
 
   return {
     templateVisibility,
-    setTemplateVisibility,
     title,
     setTitle,
     desc,
@@ -121,27 +110,15 @@ export function useSubmitFormState() {
     category,
     setCategory,
     tags,
-    setTags,
-    tagInput,
-    setTagInput,
     resultImages,
-    setResultImages,
     previewImageUrls,
     imagesFull,
-    urlDraft,
-    setUrlDraft,
-    urlError,
-    setUrlError,
-    uploadDrag,
-    setUploadDrag,
     xImportUrl,
     setXImportUrl,
     authorHandle,
     setAuthorHandle,
     success,
-    setSuccess,
     submissionId,
-    setSubmissionId,
     applyTemplateValues,
     applyXImportValues,
     markSubmitted,

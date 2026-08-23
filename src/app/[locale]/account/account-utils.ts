@@ -1,4 +1,3 @@
-import type { DailyCountPoint } from '~/lib/users/admin-user-trend';
 import type { AdminTemplateRecord, TemplateRecord } from '~/lib/prompts/template-types';
 
 export type DisplayStatusKey = 'pub' | 'draft' | 'priv' | 'pending' | 'rejected';
@@ -63,33 +62,4 @@ export function displayStatus(item: TemplateRecord | AdminTemplateRecord): Displ
   if (item.visibility === 'draft') return 'draft';
   if (item.visibility === 'private') return 'priv';
   return 'pub';
-}
-
-export function parseAdminUserStats(raw: Record<string, unknown>): {
-  totalUsers: number;
-  activeToday: number;
-  newToday: number;
-  usersDailyTrend: DailyCountPoint[];
-} | null {
-  const s = (raw.stats ?? raw) as Record<string, unknown>;
-  const totalRaw = s.totalUsers;
-  if (totalRaw == null || totalRaw === '') return null;
-  const totalUsers = Number(totalRaw);
-  if (!Number.isFinite(totalUsers)) return null;
-
-  let usersDailyTrend: DailyCountPoint[] = [];
-  if (Array.isArray(s.usersDailyTrend)) {
-    usersDailyTrend = s.usersDailyTrend as DailyCountPoint[];
-  } else if (Array.isArray(s.dailyTrend)) {
-    usersDailyTrend = (s.dailyTrend as { date: string; newUsers?: number; count?: number }[]).map(
-      (p) => ({ date: p.date, count: Number(p.newUsers ?? p.count ?? 0) }),
-    );
-  }
-
-  return {
-    totalUsers,
-    activeToday: Number(s.activeToday ?? 0),
-    newToday: Number(s.newToday ?? 0),
-    usersDailyTrend,
-  };
 }

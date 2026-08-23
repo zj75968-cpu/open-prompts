@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   PROVIDER_CAPABILITIES,
   type ProviderCapabilities,
@@ -105,6 +105,24 @@ export function useGenerationSettings(args: {
     setAspectTouched(false);
   }, [args.templateId]);
 
+  const applySettings = useCallback(
+    (settings: {
+      provider: string;
+      model: string;
+      aspectRatio: string;
+      quality: string;
+      count: number;
+    }) => {
+      setProvider(settings.provider);
+      setModel(settings.model);
+      setAspectRatio(settings.aspectRatio);
+      setAspectTouched(true);
+      setQuality(settings.quality);
+      setCount(settings.count);
+    },
+    [],
+  );
+
   return {
     provider,
     setProvider,
@@ -120,6 +138,7 @@ export function useGenerationSettings(args: {
     setCount,
     capabilities,
     modelOptions,
+    applySettings,
     getApiKeyOverride,
     saveApiKeyOverride,
     clearApiKeyOverride,

@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+import type {
+  XImportRequestDto,
+  XImportSuccessResponseDto,
+} from '~/lib/x-import/x-import-dto';
 import { getDb } from '~/db/client';
 import { parseXStatusUrl } from '~/lib/x-import/parse-x-status-url';
 import { findPromptByXStatusUrl } from '~/lib/x-import/x-source-duplicate';
@@ -56,9 +60,9 @@ export async function POST(req: Request) {
   const requestId = safeRequestId();
   const startedAt = Date.now();
 
-  let body: { url?: string };
+  let body: XImportRequestDto;
   try {
-    body = await req.json();
+    body = (await req.json()) as XImportRequestDto;
   } catch {
     console.warn('[op:x-import:body]', { requestId, error: 'invalid_json' });
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
@@ -239,7 +243,7 @@ export async function POST(req: Request) {
     })(),
   });
 
-  return NextResponse.json({
+  const response: XImportSuccessResponseDto = {
     ok: true,
     title,
     description,
@@ -247,5 +251,6 @@ export async function POST(req: Request) {
     authorHandle,
     sourceUrl,
     imageUrls,
-  });
+  };
+  return NextResponse.json(response);
 }

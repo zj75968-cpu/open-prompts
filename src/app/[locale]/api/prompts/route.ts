@@ -1,4 +1,9 @@
 import { NextResponse } from 'next/server';
+import type {
+  PromptCreateResponseDto,
+  PromptGalleryResponseDto,
+  PromptWriteRequestDto,
+} from '~/lib/prompts/prompt-dto';
 import { getDb } from '~/db/client';
 import { getAuthSession } from '~/lib/auth/session';
 import { getPromptGallery } from '~/lib/prompts/get-prompt-gallery';
@@ -10,7 +15,8 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const prompts = await getPromptGallery();
-    return NextResponse.json({ prompts, source: 'ok' });
+    const response: PromptGalleryResponseDto = { prompts, source: 'ok' };
+    return NextResponse.json(response);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'failed';
     return NextResponse.json({ error: message }, { status: 500 });
@@ -23,9 +29,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
   }
 
-  let body: unknown;
+  let body: PromptWriteRequestDto;
   try {
-    body = await req.json();
+    body = (await req.json()) as PromptWriteRequestDto;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
@@ -45,7 +51,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'duplicate_x_source', duplicate }, { status: 409 });
     }
     const row = await insertSubmittedPrompt(db, parsed.value, session?.user?.id ?? null);
-    return NextResponse.json({ ok: true, id: row.id, slug: row.slug });
+    const response: PromptCreateResponseDto = {
+      ok: true,
+      id: row.id,
+      slug: row.slug,
+    };
+    return NextResponse.json(response);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Insert failed';
     console.error('[prompts POST]', e);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GenerationHistoryEntry, GenerationUiState } from './types';
 
 const HISTORY_STORAGE_KEY = 'op_create_history';
@@ -101,5 +101,9 @@ export function useGenerationHistory(snapshot: {
     snapshot.count,
   ]);
 
-  return { history, setHistory };
+  const deleteHistoryEntry = useCallback((id: string) => {
+    setHistory((previous) => previous.filter((entry) => entry.id !== id));
+  }, []);
+
+  return { history, deleteHistoryEntry };
 }

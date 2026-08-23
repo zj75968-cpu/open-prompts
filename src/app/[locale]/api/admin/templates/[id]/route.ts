@@ -1,4 +1,9 @@
 import { NextResponse } from 'next/server';
+import type {
+  AccountTemplateResponseDto,
+  AdminTemplateReviewRequestDto,
+  AdminTemplateReviewResponseDto,
+} from '~/lib/account/account-dto';
 import { getDb } from '~/db/client';
 import { requireAdminSession } from '~/lib/auth/session';
 import { adminSetReviewStatus, getTemplateById, parseReviewStatus } from '~/lib/prompts/template-record';
@@ -23,9 +28,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const id = parseId(raw);
   if (!id) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
-  let body: { status?: string };
+  let body: Partial<AdminTemplateReviewRequestDto>;
   try {
-    body = await req.json();
+    body = (await req.json()) as Partial<AdminTemplateReviewRequestDto>;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
@@ -38,7 +43,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const item = await adminSetReviewStatus(db, id, status);
     if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    return NextResponse.json({ ok: true, item });
+    const response: AdminTemplateReviewResponseDto = { ok: true, item };
+    return NextResponse.json(response);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Update failed';
     console.error('[admin/templates PATCH]', e);
@@ -61,5 +67,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const item = await getTemplateById(db, id);
   if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json({ item });
+  const response: AccountTemplateResponseDto = { item };
+  return NextResponse.json(response);
 }

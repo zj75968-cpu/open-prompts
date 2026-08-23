@@ -1,25 +1,34 @@
-import { localeApiPath } from '~/lib/locale-api-path';
-import type { AdminTemplateRecord, TemplateRecord } from '~/lib/prompts/template-types';
-import type { AdminUserDetail, AdminUserSummary } from '~/lib/users/admin-user-record';
-import type { DailyCountPoint } from '~/lib/users/admin-user-trend';
-import { buildMyTemplatesQuery, parseMyTemplatesPage, type MyTemplatesPage } from '~/lib/account/my-templates-page';
-import { parseAdminUserStats } from './account-utils';
-
-async function readJson<T>(res: Response): Promise<T> {
-  return (await res.json().catch(() => ({}))) as T;
-}
-
-async function fetchJson<T>(
-  url: string,
-  init: RequestInit = {},
-): Promise<{ ok: boolean; status: number; data: T }> {
-  const res = await fetch(url, init);
-  return {
-    ok: res.ok,
-    status: res.status,
-    data: await readJson<T>(res),
-  };
-}
+import {
+  getAdminTemplatesPage,
+  getAdminUser,
+  getAdminUsersPage,
+  getMyTemplatesPage,
+  getMyTemplateStats,
+  removeMyTemplate,
+  removeMyTemplates,
+  reviewTemplate,
+  reviewTemplates,
+} from '~/lib/account/account-api-client';
+import {
+  isAccountApiErrorResponse,
+  type AdminUsersPageResponseDto,
+} from '~/lib/account/account-dto';
+import {
+  parseMyTemplatesPage,
+  type MyTemplatesPage,
+} from '~/lib/account/my-templates-page';
+import type {
+  AdminTemplateRecord,
+  TemplateRecord,
+} from '~/lib/prompts/template-types';
+import type {
+  AdminUserDetail,
+  AdminUserSummary,
+} from '~/lib/users/admin-user-record';
+import {
+  normalizeTrendDays,
+  type DailyCountPoint,
+} from '~/lib/users/admin-user-trend';
 
 export type MyTemplatesStats = {
   templateCount: number | null;
@@ -51,150 +60,175 @@ export type AdminUserDetailData = {
   error?: string;
 };
 
-export async function loadMyTemplatesStats(locale: string): Promise<MyTemplatesStats> {
-  const res = await fetchJson<{ templateCount?: number; pendingCount?: number }>(
-    localeApiPath(locale, '/api/my/templates/stats'),
-    { cache: 'no-store' },
-  );
-  if (!res.ok) {
+export async function loadMyTemplatesStats(
+  locale: string,
+): Promise<MyTemplatesStats> {
+  const response = await getMyTemplateStats(locale);
+  if (!response.ok || isAccountApiErrorResponse(response.data)) {
     return { templateCount: null, pendingCount: null };
   }
   return {
-    templateCount: typeof res.data.templateCount === 'number' ? res.data.templateCount : 0,
-    pendingCount: typeof res.data.pendingCount === 'number' ? res.data.pendingCount : 0,
+    templateCount: response.data.templateCount,
+    pendingCount: response.data.pendingCount,
   };
 }
 
-export async function loadMyTemplatesPage(locale: string, params: {
-  search: string;
-  statusFilter: string;
-  page: number;
-  pageSize: number;
-  signal?: AbortSignal;
-}): Promise<{ ok: boolean; status: number; page: MyTemplatesPage }> {
-  const q = buildMyTemplatesQuery(params.search, params.statusFilter, params.page, params.pageSize);
-  const res = await fetchJson<{ items?: TemplateRecord[]; total?: number; offset?: number }>(
-    localeApiPath(locale, `/api/my/templates?${q}`),
-    { cache: 'no-store', signal: params.signal },
+export async function loadMyTemplatesPage(
+  locale: string,
+  params: {
+    search: string;
+    statusFilter: string;
+    page: number;
+    pageSize: number;
+    signal?: AbortSignal;
+  },
+): Promise<{ ok: boolean; status: number; page: MyTemplatesPage }> {
+  const response = await getMyTemplatesPage(
+    locale,
+    {
+      q: params.search,
+      status: params.statusFilter || undefined,
+      limit: params.pageSize,
+      offset: (params.page - 1) * params.pageSize,
+    },
+    params.signal,
   );
+  const data = isAccountApiErrorResponse(response.data)
+    ? { items: [] as TemplateRecord[], total: 0, offset: 0 }
+    : response.data;
   return {
-    ok: res.ok,
-    status: res.status,
-    page: parseMyTemplatesPage(res.data, params.page, params.pageSize),
+    ok: response.ok,
+    status: response.status,
+    page: parseMyTemplatesPage(data, params.page, params.pageSize),
   };
 }
 
-export async function loadAdminTemplatesPage(locale: string, params: {
-  search: string;
-  statusFilter: string;
-  page: number;
-  pageSize: number;
-  trendDays: number;
-  signal?: AbortSignal;
-}): Promise<{ ok: boolean; status: number; data: AdminTemplatesPageData }> {
-  const q = new URLSearchParams();
-  if (params.search.trim()) q.set('q', params.search.trim());
-  if (params.statusFilter) q.set('status', params.statusFilter);
-  q.set('limit', String(params.pageSize));
-  q.set('offset', String((params.page - 1) * params.pageSize));
-  q.set('trendDays', String(params.trendDays));
-
-  const res = await fetchJson<{
-    items?: AdminTemplateRecord[];
-    total?: number | null;
-    hasMore?: boolean;
-    pendingCount?: number;
-    promptsDailyTrend?: DailyCountPoint[];
-    error?: string;
-  }>(localeApiPath(locale, `/api/admin/templates?${q}`), {
-    cache: 'no-store',
-    signal: params.signal,
-  });
-
+export async function loadAdminTemplatesPage(
+  locale: string,
+  params: {
+    search: string;
+    statusFilter: string;
+    page: number;
+    pageSize: number;
+    trendDays: number;
+    signal?: AbortSignal;
+  },
+): Promise<{ ok: boolean; status: number; data: AdminTemplatesPageData }> {
+  const response = await getAdminTemplatesPage(
+    locale,
+    {
+      q: params.search,
+      status: params.statusFilter || undefined,
+      limit: params.pageSize,
+      offset: (params.page - 1) * params.pageSize,
+      trendDays: normalizeTrendDays(params.trendDays),
+    },
+    params.signal,
+  );
+  const data = isAccountApiErrorResponse(response.data) ? null : response.data;
   return {
-    ok: res.ok,
-    status: res.status,
+    ok: response.ok,
+    status: response.status,
     data: {
-      items: res.data.items ?? [],
-      total: typeof res.data.total === 'number' ? res.data.total : null,
-      hasMore: Boolean(res.data.hasMore),
-      pendingCount: typeof res.data.pendingCount === 'number' ? res.data.pendingCount : null,
-      promptsDailyTrend: Array.isArray(res.data.promptsDailyTrend) ? res.data.promptsDailyTrend : [],
+      items: data?.items ?? [],
+      total: data?.total ?? null,
+      hasMore: data?.hasMore ?? false,
+      pendingCount: data?.pendingCount ?? null,
+      promptsDailyTrend: data?.promptsDailyTrend ?? [],
     },
   };
 }
 
-export async function loadAdminTemplatesBadge(locale: string): Promise<number | null> {
-  const res = await fetchJson<{ pendingCount?: number }>(
-    localeApiPath(locale, '/api/admin/templates?limit=1'),
-    { cache: 'no-store' },
-  );
-  return res.ok && typeof res.data.pendingCount === 'number' ? res.data.pendingCount : null;
+export async function loadAdminTemplatesBadge(
+  locale: string,
+): Promise<number | null> {
+  const response = await getAdminTemplatesPage(locale, { limit: 1 });
+  return response.ok && !isAccountApiErrorResponse(response.data)
+    ? response.data.pendingCount
+    : null;
 }
 
-export async function loadAdminUsersPage(locale: string, params: {
-  search: string;
-  page: number;
-  pageSize: number;
-  trendDays: number;
-  signal?: AbortSignal;
-}): Promise<{ ok: boolean; status: number; data: AdminUsersPageData; error?: string }> {
-  const q = new URLSearchParams();
-  if (params.search.trim()) q.set('q', params.search.trim());
-  q.set('limit', String(params.pageSize));
-  q.set('offset', String((params.page - 1) * params.pageSize));
-  q.set('trendDays', String(params.trendDays));
-
-  const res = await fetchJson<Record<string, unknown> & {
-    items?: AdminUserSummary[];
-    total?: number;
-    hasMore?: boolean;
-    error?: string;
-    stats?: Record<string, unknown>;
-  }>(localeApiPath(locale, `/api/admin/users?${q}`), {
-    cache: 'no-store',
-    signal: params.signal,
-  });
-
-  const stats = parseAdminUserStats(res.data);
+export async function loadAdminUsersPage(
+  locale: string,
+  params: {
+    search: string;
+    page: number;
+    pageSize: number;
+    trendDays: number;
+    signal?: AbortSignal;
+  },
+): Promise<{
+  ok: boolean;
+  status: number;
+  data: AdminUsersPageData;
+  error?: string;
+}> {
+  const response = await getAdminUsersPage(
+    locale,
+    {
+      q: params.search,
+      limit: params.pageSize,
+      offset: (params.page - 1) * params.pageSize,
+      trendDays: normalizeTrendDays(params.trendDays),
+    },
+    params.signal,
+  );
+  let data: AdminUsersPageResponseDto | null;
+  let error: string | undefined;
+  if (isAccountApiErrorResponse(response.data)) {
+    data = null;
+    error = response.data.error;
+  } else {
+    data = response.data;
+    error = undefined;
+  }
   return {
-    ok: res.ok,
-    status: res.status,
-    error: res.data.error,
+    ok: response.ok,
+    status: response.status,
+    error,
     data: {
-      items: res.data.items ?? [],
-      total: typeof res.data.total === 'number' ? res.data.total : null,
-      hasMore: Boolean(res.data.hasMore),
-      stats,
+      items: data?.items ?? [],
+      total: data?.total ?? null,
+      hasMore: data?.hasMore ?? false,
+      stats: data
+        ? {
+            totalUsers: data.stats.totalUsers,
+            activeToday: data.stats.activeToday,
+            newToday: data.stats.newToday,
+            usersDailyTrend: data.stats.usersDailyTrend,
+          }
+        : null,
     },
   };
 }
 
-export async function loadAdminUserDetail(locale: string, id: string): Promise<AdminUserDetailData> {
-  const res = await fetchJson<{ item?: AdminUserDetail; error?: string }>(
-    localeApiPath(locale, `/api/admin/users/${id}`),
-    { cache: 'no-store' },
-  );
+export async function loadAdminUserDetail(
+  locale: string,
+  id: string,
+): Promise<AdminUserDetailData> {
+  const response = await getAdminUser(locale, id);
+  if (isAccountApiErrorResponse(response.data)) {
+    return { item: null, error: response.data.error };
+  }
   return {
-    item: res.ok ? res.data.item ?? null : null,
-    error: res.data.error,
+    item: response.ok ? response.data.item : null,
   };
 }
 
-export async function deleteMyTemplate(locale: string, id: number): Promise<{ ok: boolean; status: number }> {
-  const res = await fetchJson<unknown>(localeApiPath(locale, `/api/my/templates/${id}`), {
-    method: 'DELETE',
-  });
-  return { ok: res.ok, status: res.status };
+export async function deleteMyTemplate(
+  locale: string,
+  id: number,
+): Promise<{ ok: boolean; status: number }> {
+  const response = await removeMyTemplate(locale, id);
+  return { ok: response.ok, status: response.status };
 }
 
-export async function bulkDeleteMyTemplates(locale: string, ids: number[]): Promise<{ ok: boolean; status: number }> {
-  const res = await fetchJson<unknown>(localeApiPath(locale, '/api/my/templates/bulk'), {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ids }),
-  });
-  return { ok: res.ok, status: res.status };
+export async function bulkDeleteMyTemplates(
+  locale: string,
+  ids: number[],
+): Promise<{ ok: boolean; status: number }> {
+  const response = await removeMyTemplates(locale, ids);
+  return { ok: response.ok, status: response.status };
 }
 
 export async function reviewAdminTemplate(
@@ -202,12 +236,8 @@ export async function reviewAdminTemplate(
   id: number,
   status: 'approved' | 'rejected',
 ): Promise<{ ok: boolean; status: number }> {
-  const res = await fetchJson<unknown>(localeApiPath(locale, `/api/admin/templates/${id}`), {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status }),
-  });
-  return { ok: res.ok, status: res.status };
+  const response = await reviewTemplate(locale, id, status);
+  return { ok: response.ok, status: response.status };
 }
 
 export async function bulkReviewAdminTemplates(
@@ -215,10 +245,6 @@ export async function bulkReviewAdminTemplates(
   ids: number[],
   status: 'approved' | 'rejected',
 ): Promise<{ ok: boolean; status: number }> {
-  const res = await fetchJson<unknown>(localeApiPath(locale, '/api/admin/templates/bulk'), {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ids, status }),
-  });
-  return { ok: res.ok, status: res.status };
+  const response = await reviewTemplates(locale, ids, status);
+  return { ok: response.ok, status: response.status };
 }

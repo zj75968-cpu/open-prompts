@@ -1303,8 +1303,6 @@
       "ratioUltraWide": "超宽（{ratio}）",
       "ratioLandscape": "横图（{ratio}）",
       "ratioPortrait": "竖图（{ratio}）",
-      "githubRepoAriaLabel": "GitHub 仓库",
-      "githubTitle": "GitHub",
       "hero": {
         "title": "更好的提示词 更好的出图",
         "titleLine1": "更好的提示词",

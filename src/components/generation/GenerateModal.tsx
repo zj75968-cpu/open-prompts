@@ -7,8 +7,14 @@ import { renderPromptTemplate, TemplateValidationError } from '~/lib/templates/r
 import { BYOK_PROVIDER_NAMES } from '~/lib/generation/provider-names';
 import { PROVIDER_CAPABILITIES } from '~/lib/generation/capabilities';
 import { useTranslations } from 'next-intl';
-import { getOrCreateUserId } from '~/lib/credits/fingerprint';
-import { localeApiPath } from '~/lib/locale-api-path';
+import {
+  createGenerationJob,
+  pollGenerationJob,
+} from '~/lib/generation/generation-api-client';
+import {
+  isGenerationErrorResponse,
+  type GenerationPollResponseDto,
+} from '~/lib/generation/generation-dto';
 
 type Props = {
   open: boolean;
@@ -77,21 +83,27 @@ export function GenerateModal({ open, onClose, locale, item }: Props) {
     let cancelled = false;
     const tick = async () => {
       try {
-        const res = await fetch(localeApiPath(locale, `/api/generations/${encodeURIComponent(providerJobId)}`), {
-          cache: 'no-store',
-        }).then((r) => r.json());
+        const response = await pollGenerationJob(locale, providerJobId);
+        if (!response.ok) {
+          throw new Error(
+            isGenerationErrorResponse(response.data)
+              ? response.data.error
+              : t('gen.pollingFailed'),
+          );
+        }
+        const res = response.data as GenerationPollResponseDto;
         if (cancelled) return;
-        if (res?.status === 'running' || res?.status === 'queued') {
+        if (res.status === 'running' || res.status === 'queued') {
           setUiState(res.status);
           return;
         }
-        if (res?.status === 'succeeded') {
+        if (res.status === 'succeeded') {
           setUiState('succeeded');
           setImages(Array.isArray(res.images) ? res.images : []);
           return;
         }
         setUiState('failed');
-        setError(res?.error || t('gen.generationFailed'));
+        setError(res.error || t('gen.generationFailed'));
       } catch (e: any) {
         if (cancelled) return;
         setUiState('failed');
@@ -118,23 +130,25 @@ export function GenerateModal({ open, onClose, locale, item }: Props) {
     setUiState('queued');
     setImages([]);
     try {
-      const res = await fetch(localeApiPath(locale, '/api/generations'), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-op-user-id': getOrCreateUserId() },
-        body: JSON.stringify({
-          provider,
-          prompt: rendered.prompt,
-          negativePrompt: rendered.negativePrompt,
-          model: template.model,
-          aspectRatio,
-          quality,
-          count,
-        }),
-      }).then((r) => r.json());
+      const response = await createGenerationJob(locale, {
+        provider,
+        prompt: rendered.prompt,
+        negativePrompt: rendered.negativePrompt,
+        model: template.model,
+        aspectRatio,
+        quality,
+        count,
+      });
 
-      if (res?.error) throw new Error(res.error);
-      setProviderJobId(res.providerJobId);
-      setUiState(res.status || 'queued');
+      if (!response.ok || isGenerationErrorResponse(response.data)) {
+        throw new Error(
+          isGenerationErrorResponse(response.data)
+            ? response.data.error
+            : t('gen.createFailed'),
+        );
+      }
+      setProviderJobId(response.data.providerJobId);
+      setUiState(response.data.status || 'queued');
     } catch (e: any) {
       setUiState('failed');
       setError(e?.message || t('gen.createFailed'));

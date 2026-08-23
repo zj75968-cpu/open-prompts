@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+import type {
+  MyTemplatesBulkDeleteRequestDto,
+  MyTemplatesBulkDeleteResponseDto,
+} from '~/lib/account/account-dto';
 import { getDb } from '~/db/client';
 import { requireAuthSession } from '~/lib/auth/session';
 import { bulkDeleteUserTemplates } from '~/lib/prompts/template-record';
@@ -24,9 +28,9 @@ export async function DELETE(req: Request) {
   const db = getDb();
   if (!db) return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
 
-  let body: { ids?: unknown };
+  let body: Partial<MyTemplatesBulkDeleteRequestDto>;
   try {
-    body = await req.json();
+    body = (await req.json()) as Partial<MyTemplatesBulkDeleteRequestDto>;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
@@ -39,7 +43,8 @@ export async function DELETE(req: Request) {
 
   try {
     const deleted = await bulkDeleteUserTemplates(db, ids, session.user.id);
-    return NextResponse.json({ ok: true, deleted });
+    const response: MyTemplatesBulkDeleteResponseDto = { ok: true, deleted };
+    return NextResponse.json(response);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Bulk delete failed';
     console.error('[my/templates/bulk DELETE]', e);

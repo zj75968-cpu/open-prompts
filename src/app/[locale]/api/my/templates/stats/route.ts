@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { MyTemplateStatsResponseDto } from '~/lib/account/account-dto';
 import { getDb } from '~/db/client';
 import { requireAuthSession } from '~/lib/auth/session';
 import { countUserPendingReview, countUserTemplates } from '~/lib/prompts/template-record';
@@ -17,7 +18,11 @@ export async function GET() {
   try {
     const templateCount = await countUserTemplates(db, session.user.id);
     const pendingCount = await countUserPendingReview(db, session.user.id);
-    return NextResponse.json({ templateCount, pendingCount });
+    const response: MyTemplateStatsResponseDto = {
+      templateCount,
+      pendingCount,
+    };
+    return NextResponse.json(response);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Stats failed';
     return NextResponse.json({ error: message }, { status: 500 });

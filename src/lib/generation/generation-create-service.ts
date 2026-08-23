@@ -8,18 +8,19 @@ import {
   encodeProviderJobId,
   getDefaultProviderName,
 } from '~/lib/generation/registry';
-import type { GenerationCreateParams } from '~/lib/generation/types';
+import type {
+  GenerationApiResponseDto,
+  GenerationCreateRequestDto,
+  GenerationCreateResponseDto,
+} from '~/lib/generation/generation-dto';
 
-export type GenerationServiceResult = {
+export type GenerationServiceResult<TBody> = {
   status: number;
-  body: Record<string, unknown>;
+  body: TBody;
   headers?: Record<string, string>;
 };
 
-type GenerationCreateRequest = Partial<GenerationCreateParams> & {
-  provider?: string;
-  apiKey?: string;
-};
+type GenerationCreateRequest = Partial<GenerationCreateRequestDto>;
 
 type CreateGenerationContext = {
   cookieHeader: string;
@@ -66,7 +67,11 @@ function creditsHeaders(context: GenerationCreditsContext) {
 export async function createGeneration(
   payload: unknown,
   context: CreateGenerationContext,
-): Promise<GenerationServiceResult> {
+): Promise<
+  GenerationServiceResult<
+    GenerationApiResponseDto<GenerationCreateResponseDto>
+  >
+> {
   const requestId = safeId();
   const startedAt = Date.now();
   const useTestMode = String(process.env.USE_TEST_MODE || '').toLowerCase() === 'true';

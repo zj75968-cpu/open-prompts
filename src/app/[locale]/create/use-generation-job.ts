@@ -1,21 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getOrCreateUserId } from '~/lib/credits/fingerprint';
-import { localeApiPath } from '~/lib/locale-api-path';
+import {
+  createGeneration,
+  pollGeneration,
+  providerFromGenerationJob,
+  type CreateGenerationRequest,
+} from './create-api';
 import type { GenerationUiState } from './types';
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-type StartGenerationParams = {
-  prompt: string;
-  provider: string;
-  apiKey?: string;
-  model: string;
-  aspectRatio: string;
-  quality: string;
-  count: number;
-};
+type StartGenerationParams = CreateGenerationRequest;
 
 type UseGenerationJobOptions = {
   locale: string;
@@ -47,6 +43,19 @@ export function useGenerationJob({
     setImages([]);
   }, []);
 
+  const restoreGeneration = useCallback(
+    (snapshot: {
+      providerJobId: string | null;
+      images: string[];
+    }) => {
+      setError(null);
+      setProviderJobId(snapshot.providerJobId);
+      setImages(snapshot.images);
+      setUiState(snapshot.images.length ? 'succeeded' : 'idle');
+    },
+    [],
+  );
+
   const startGeneration = useCallback(
     async (params: StartGenerationParams) => {
       const prompt = params.prompt.trim();
@@ -60,23 +69,12 @@ export function useGenerationJob({
       setImages([]);
 
       try {
-        const res = await fetch(localeApiPath(locale, '/api/generations'), {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-op-user-id': getOrCreateUserId() },
-          body: JSON.stringify({
-            provider: params.provider === 'internal' ? undefined : params.provider,
-            prompt,
-            apiKey: params.provider === 'internal' ? undefined : params.apiKey || undefined,
-            model: params.model,
-            aspectRatio: params.aspectRatio,
-            quality: params.quality,
-            count: params.count,
-          }),
-        }).then((response) => response.json());
-
-        if (res?.error) throw new Error(res.error);
-        setProviderJobId(res.providerJobId);
-        setUiState(res.status || 'queued');
+        const result = await createGeneration(locale, {
+          ...params,
+          prompt,
+        });
+        setProviderJobId(result.providerJobId);
+        setUiState(result.status);
       } catch (e: unknown) {
         setUiState('failed');
         setError(getErrorMessage(e, messages.createFailed));
@@ -92,26 +90,25 @@ export function useGenerationJob({
     let cancelled = false;
     const tick = async () => {
       try {
-        const encoded = providerJobId || '';
-        const providerFromJob = encoded.includes(':') ? encoded.slice(0, encoded.indexOf(':')) : provider;
+        const providerFromJob = providerFromGenerationJob(
+          providerJobId,
+          provider,
+        );
         const key = getApiKeyOverride(providerFromJob);
-        const res = await fetch(localeApiPath(locale, `/api/generations/${encodeURIComponent(providerJobId)}`), {
-          cache: 'no-store',
-          headers: key ? { 'x-op-api-key': key } : undefined,
-        }).then((response) => response.json());
+        const result = await pollGeneration(locale, providerJobId, key || undefined);
 
         if (cancelled) return;
-        if (res?.status === 'running' || res?.status === 'queued') {
-          setUiState(res.status);
+        if (result.status === 'running' || result.status === 'queued') {
+          setUiState(result.status);
           return;
         }
-        if (res?.status === 'succeeded') {
+        if (result.status === 'succeeded') {
           setUiState('succeeded');
-          setImages(Array.isArray(res.images) ? res.images : []);
+          setImages(result.images);
           return;
         }
         setUiState('failed');
-        setError(res?.error || messages.generationFailed);
+        setError(result.error || messages.generationFailed);
       } catch (e: unknown) {
         if (cancelled) return;
         setUiState('failed');
@@ -134,15 +131,12 @@ export function useGenerationJob({
 
   return {
     uiState,
-    setUiState,
     providerJobId,
-    setProviderJobId,
     images,
-    setImages,
     error,
-    setError,
     canGenerate,
     resetGeneration,
+    restoreGeneration,
     startGeneration,
   };
 }

@@ -12,15 +12,6 @@ export function isValidImageSrc(value: string): boolean {
   return /^https?:\/\//i.test(source) || source.startsWith('data:');
 }
 
-export function readFileAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
 export function templateToSubmitFormValues(item: TemplateRecord): SubmitFormValues {
   const category = (resolvePromptCategory(item.category, item.tags) ?? '') as SubmitFormValues['category'];
   return {

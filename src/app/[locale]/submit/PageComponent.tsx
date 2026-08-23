@@ -8,21 +8,18 @@ import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import type { PromptVisibility } from '~/lib/prompts/template-types';
-import {
-  getSubmitCategoryTags,
-  isSubmitCategoryKey,
-  type SubmitCategoryKey,
-} from '~/lib/prompts/prompt-categories';
-import { PromptCategoryStrip } from '~/components/prompt-gallery/PromptCategoryStrip';
-import { formatSubTagLabel } from '~/lib/prompts/sub-tag-i18n';
+import { isSubmitCategoryKey } from '~/lib/prompts/prompt-categories';
 import { parseSubmitEditId, submitEditorHref } from '~/lib/prompts/submit-editor-path';
 import { OpenPromptsSiteFooter } from '~/components/open-prompts/OpenPromptsSiteFooter';
 import { OpenPromptsSiteHeader } from '~/components/open-prompts/OpenPromptsSiteHeader';
 import { accountPanelHref } from '~/lib/account/account-path';
-import { SubmitPreviewImageStrip } from './SubmitPreviewImageStrip';
+import { AssetEditor } from './AssetEditor';
+import { PromptFields } from './PromptFields';
+import { SourceImport } from './SourceImport';
 import { SubmitLanding } from './SubmitLanding';
-import { MAX_RESULT_IMAGES, MAX_TITLE, MODEL_EMOJI, MODEL_IDS } from './submit-types';
-import { isValidImageSrc, readFileAsDataUrl } from './submit-utils';
+import { SubmitLivePreview } from './SubmitLivePreview';
+import { SubmitSuccess } from './SubmitSuccess';
+import { VisibilitySection } from './VisibilitySection';
 import { useEditTemplateWorkflow } from './use-edit-template-workflow';
 import { useSubmitFormState } from './use-submit-form-state';
 import { useSubmitWorkflow } from './use-submit-workflow';
@@ -33,10 +30,6 @@ export type SubmitPageProps = {
   quickTags: string[];
 };
 
-function accountHref(locale: string) {
-  return accountPanelHref(locale, 'prompts');
-}
-
 function loginHref(locale: string, returnPath: string) {
   const base = locale === 'en' ? '/login' : `/${locale}/login`;
   return `${base}?callbackUrl=${encodeURIComponent(returnPath)}`;
@@ -44,14 +37,9 @@ function loginHref(locale: string, returnPath: string) {
 
 export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
   const t = useTranslations('OpenPrompts.submitPage');
-  const tGallery = useTranslations('OpenPrompts.gallery');
   const router = useRouter();
   const searchParams = useSearchParams();
   const { status: authStatus } = useSession();
-  const galleryHref = locale === 'en' ? '/' : `/${locale}`;
-  const submitPublicPath = submitEditorHref(locale, { visibility: 'public' });
-  const submitPrivatePath = submitEditorHref(locale, { visibility: 'private' });
-  const submitChooserPath = submitEditorHref(locale);
 
   const editId = parseSubmitEditId(searchParams?.get('edit'));
   const isEditMode = editId !== null;
@@ -59,49 +47,13 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
   const isPublicMode = !isEditMode && visibilityParam === 'public';
   const isPrivateMode = !isEditMode && visibilityParam === 'private';
   const isChooserMode = !isEditMode && !isPublicMode && !isPrivateMode;
+  const submitPublicPath = submitEditorHref(locale, { visibility: 'public' });
+  const submitPrivatePath = submitEditorHref(locale, { visibility: 'private' });
+  const submitChooserPath = submitEditorHref(locale);
 
-  const {
-    templateVisibility,
-    title,
-    setTitle,
-    desc,
-    setDesc,
-    modelId,
-    setModelId,
-    prompt,
-    setPrompt,
-    category,
-    setCategory,
-    tags,
-    tagInput,
-    setTagInput,
-    resultImages,
-    previewImageUrls,
-    imagesFull,
-    urlDraft,
-    setUrlDraft,
-    urlError,
-    setUrlError,
-    uploadDrag,
-    setUploadDrag,
-    xImportUrl,
-    setXImportUrl,
-    authorHandle,
-    setAuthorHandle,
-    success,
-    submissionId,
-    applyTemplateValues,
-    applyXImportValues,
-    markSubmitted,
-    addTag,
-    removeTag,
-    addImageUrl: addImageUrlToState,
-    appendImages,
-    removeImage,
-    resetCreateForm,
-  } = useSubmitFormState();
+  const form = useSubmitFormState();
   const saveVisibility: PromptVisibility = isEditMode
-    ? templateVisibility
+    ? form.templateVisibility
     : isPrivateMode
       ? 'private'
       : 'public';
@@ -115,62 +67,22 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
     editId,
     enabled: isEditMode && authStatus === 'authenticated',
     loadFailedMessage: t('editMode.loadFailed'),
-    onTemplateLoaded: applyTemplateValues,
+    onTemplateLoaded: form.applyTemplateValues,
   });
 
-  const {
-    busy: xImportBusy,
-    error: xImportError,
-    succeeded: xImportOk,
-    duplicate: xDuplicate,
-    setDuplicate: setXDuplicate,
-    changeImportUrl,
-    changeSourceUrl,
-    runImport: runXImport,
-    resetFeedback: resetXImportFeedback,
-  } = useXImportWorkflow({
+  const xImport = useXImportWorkflow({
     locale,
     editId,
-    url: xImportUrl,
+    url: form.xImportUrl,
     messages: {
       notTweet: t('xImport.errorNotTweet'),
       duplicate: t('xImport.errorDuplicate'),
       generic: t('xImport.errorGeneric'),
     },
-    onUrlChange: setXImportUrl,
-    onAuthorHandleChange: setAuthorHandle,
-    onImported: applyXImportValues,
+    onUrlChange: form.setXImportUrl,
+    onAuthorHandleChange: form.setAuthorHandle,
+    onImported: form.applyXImportValues,
   });
-
-  const xDuplicateStatusLabel = useCallback(
-    (status: string) => {
-      const known = ['approved', 'pending', 'rejected', 'draft'] as const;
-      if ((known as readonly string[]).includes(status)) {
-        return t(`xImport.duplicateStatus.${status}` as 'xImport.duplicateStatus.approved');
-      }
-      return status;
-    },
-    [t],
-  );
-
-  const renderXDuplicateHint = () => {
-    if (!xDuplicate) return null;
-    return (
-      <div className="op-sp-info mt-2 border-[var(--amber)]/30 bg-[color-mix(in_oklab,var(--amber)_8%,transparent)]">
-        <p className="text-xs leading-relaxed text-[var(--text2)]">
-          {t('xImport.duplicateHint', {
-            title: xDuplicate.title,
-            status: xDuplicateStatusLabel(xDuplicate.status),
-          })}{' '}
-          {xDuplicate.sourceUrl ? (
-            <a href={xDuplicate.sourceUrl} target="_blank" rel="noopener noreferrer">
-              {t('xImport.duplicateLink')}
-            </a>
-          ) : null}
-        </p>
-      </div>
-    );
-  };
 
   const authReturnPath =
     isEditMode && editId
@@ -190,27 +102,21 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
     requireAuthentication();
   }, [isPrivateMode, isEditMode, authStatus, requireAuthentication]);
 
-  const {
-    submitting,
-    shakeId,
-    blockedHint,
-    submit: doSubmit,
-    clearBlockedHint,
-  } = useSubmitWorkflow({
+  const submitWorkflow = useSubmitWorkflow({
     locale,
     editId,
     isAuthenticated: authStatus === 'authenticated',
     requiresAuthentication: isPrivateMode || isEditMode,
     values: {
-      title,
-      description: desc,
-      prompt,
-      modelId,
-      category,
-      tags,
-      images: previewImageUrls,
-      sourceUrl: xImportUrl,
-      authorHandle,
+      title: form.title,
+      description: form.desc,
+      prompt: form.prompt,
+      modelId: form.modelId,
+      category: form.category,
+      tags: form.tags,
+      images: form.previewImageUrls,
+      sourceUrl: form.xImportUrl,
+      authorHandle: form.authorHandle,
       visibility: saveVisibility,
     },
     messages: {
@@ -224,680 +130,185 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
         t('xImport.duplicateSubmitBlocked', { title: duplicateTitle }),
     },
     onAuthenticationRequired: requireAuthentication,
-    onDuplicate: setXDuplicate,
-    onSubmitted: markSubmitted,
+    onDuplicate: xImport.setDuplicate,
+    onSubmitted: form.markSubmitted,
   });
 
-  const promptLenOk = prompt.trim().length >= 10;
-  const titleOk = title.trim().length > 0;
-  const modelOk = !!modelId;
-  const categoryOk = isSubmitCategoryKey(category);
-
-  const categorySubTags = useMemo(() => {
-    if (!isSubmitCategoryKey(category)) return [];
-    return getSubmitCategoryTags(category);
-  }, [category]);
-
-  const handleCategoryPick = (next: 'all' | SubmitCategoryKey) => {
-    if (next === 'all') return;
-    setCategory(next);
-  };
-
-  const handleCategorySubTagPick = (tag: string) => {
-    addTag(tag);
-  };
-
-  const categoryLabelFor =
-    category && isSubmitCategoryKey(category)
-      ? t(`categories.${category}`)
-      : '';
-  const tagsOk = tags.length >= 2 && tags.length <= 8;
-
-  const onTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'Enter' && e.key !== ',') return;
-    e.preventDefault();
-    addTag(tagInput);
-    setTagInput('');
-  };
-
-  const handleFiles = (files: FileList | null) => {
-    if (!files?.length) return;
-    void (async () => {
-      const incoming = Array.from(files);
-      const dataUrls: string[] = [];
-      for (const file of incoming) {
-        if (dataUrls.length >= MAX_RESULT_IMAGES) break;
-        try {
-          // eslint-disable-next-line no-await-in-loop
-          dataUrls.push(await readFileAsDataUrl(file));
-        } catch {
-          break;
-        }
-      }
-      if (dataUrls.length === 0) return;
-      appendImages(dataUrls);
-    })();
-    setUploadDrag(false);
-  };
-
-  const addImageUrl = useCallback(() => {
-    const raw = urlDraft.trim();
-    if (!raw) return;
-    if (imagesFull) {
-      setUrlError(t('validation.imageLimit'));
-      return;
-    }
-    if (!isValidImageSrc(raw)) {
-      setUrlError(t('validation.invalidImageUrl'));
-      return;
-    }
-    if (resultImages.includes(raw)) {
-      setUrlError(t('validation.duplicateImageUrl'));
-      return;
-    }
-    addImageUrlToState(raw);
-    setUrlDraft('');
-    setUrlError(null);
-  }, [addImageUrlToState, imagesFull, resultImages, setUrlDraft, setUrlError, t, urlDraft]);
-
-  const onUrlKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    addImageUrl();
-  };
-
-  const copyPrompt = () => {
-    if (!prompt) return;
-    void navigator.clipboard.writeText(prompt).then(() => {
-      const btn = document.getElementById('op-sp-copy-btn');
-      if (btn) {
-        const prev = btn.textContent;
-        btn.textContent = t('buttons.copied');
-        window.setTimeout(() => {
-          btn.textContent = prev || t('buttons.copyPrompt');
-        }, 1500);
-      }
-    });
-  };
+  const validationChecks = useMemo(
+    () => ({
+      promptLength: form.prompt.trim().length >= 10,
+      title: form.title.trim().length > 0,
+      model: Boolean(form.modelId),
+      category: isSubmitCategoryKey(form.category),
+      tags: form.tags.length >= 2 && form.tags.length <= 8,
+    }),
+    [form.category, form.modelId, form.prompt, form.tags.length, form.title],
+  );
 
   const resetForm = () => {
-    clearBlockedHint();
+    submitWorkflow.clearBlockedHint();
     if (isEditMode) {
       void loadEditTemplate();
       return;
     }
-    resetCreateForm();
-    resetXImportFeedback();
+    form.resetCreateForm();
+    xImport.resetFeedback();
   };
 
-  const modelLabel = useMemo(() => t(`modelValues.${modelId}`), [t, modelId]);
-  const categoryLabel = categoryLabelFor;
-  const categoryLabelFn = (id: SubmitCategoryKey) => t(`categories.${id}`);
-  const subTagLabelFn = (tag: string) => formatSubTagLabel(tag, (key) => t(`subTags.${key}`));
+  const editorUnavailable = isEditMode && (loadingTemplate || Boolean(loadError));
 
   return (
     <div className="min-h-screen w-full bg-[var(--bg)] text-[var(--text)]">
       <OpenPromptsSiteHeader locale={locale} activeNav="submit" langPathSuffix="/submit" />
       <main className="w-full">
-        {isChooserMode && !success ? (
+        {isChooserMode && !form.success ? (
           <div className="op-submit-shell relative">
             <SubmitLanding publicHref={submitPublicPath} privateHref={submitPrivatePath} />
           </div>
         ) : (
-        <div className="op-submit-shell relative">
-          <div className="mx-auto w-full max-w-7xl px-6">
-            <div className={`op-sp-page${success ? ' op-sp-page--simple' : ''}`}>
-              <div className={`op-sp-form-area${success ? ' op-sp-form-area--simple' : ''}`}>
-                {!success ? (
-                  <>
-                    <header className="mb-8">
-                      {!isEditMode ? (
-                        <Link href={submitChooserPath} className="mb-4 inline-block text-xs text-[var(--text3)] hover:text-[var(--amber)]">
-                          {t('chooser.back')}
-                        </Link>
-                      ) : null}
-                      <div className="op-sp-wizard-eyebrow">
-                        {isEditMode
-                          ? t('editMode.eyebrow')
-                          : isPrivateMode
-                            ? t('privateMode.eyebrow')
-                            : t('wizard.eyebrow')}
-                      </div>
-                      <h1 className="op-sp-wizard-title">
-                        {isEditMode ? (
-                          <>
-                            {t('editMode.title')}
-                            <em>{t('editMode.titleEm')}</em>
-                          </>
-                        ) : isPrivateMode ? (
-                          <>
-                            {t('privateMode.title')}
-                            <em>{t('privateMode.titleEm')}</em>
-                          </>
-                        ) : (
-                          <>
-                            {t('wizard.title')}
-                            <em>{t('wizard.titleEm')}</em>
-                          </>
-                        )}
-                      </h1>
-                      <p className="op-sp-wizard-sub">
-                        {isEditMode
-                          ? t('editMode.subtitle')
-                          : isPrivateMode
-                            ? t('privateMode.subtitle')
-                            : t('wizard.subtitleSimple')}
-                      </p>
-                    </header>
-
-                    {isEditMode && loadError ? (
-                      <div className="op-sp-info mb-6 border-[var(--coral)]/40">
-                        <p className="text-[var(--coral)]">{loadError}</p>
-                        <Link href={accountHref(locale)} className="mt-2 inline-block text-sm text-[var(--amber)]">
-                          {t('editMode.backToTemplates')}
-                        </Link>
-                      </div>
-                    ) : null}
-
-                    {isEditMode && loadingTemplate ? (
-                      <p className="mb-6 text-sm text-[var(--text2)]">{t('editMode.loading')}</p>
-                    ) : null}
-
-                    {isEditMode && (loadingTemplate || loadError) ? null : (
-                      <>
-                    {isPrivateMode ? (
-                      <div className="op-sp-info mb-6 border-[var(--amber)]/30 bg-[color-mix(in_oklab,var(--amber)_8%,transparent)]">
-                        <p>{t('privateMode.hint')}</p>
-                      </div>
-                    ) : null}
-
-                    <div className="op-sp-info mb-6">
-                      <p>
-                        {t('info.body', { ar: t('info.ar'), v: t('info.v') })}{' '}
-                        <a href="#">{t('info.link')}</a>
-                      </p>
-                    </div>
-
-                    <div className="op-sp-form-group mb-6 rounded-lg border border-[var(--border2)] bg-[var(--surface)] p-4">
-                      <div className="op-sp-label mb-2 !normal-case !tracking-normal">{t('xImport.title')}</div>
-                      <p className="mb-3 text-xs leading-relaxed text-[var(--text2)]">{t('xImport.desc')}</p>
-                      <div className="op-sp-source-row">
-                        <input
-                          className="op-sp-input"
-                          type="url"
-                          inputMode="url"
-                          value={xImportUrl}
-                          onChange={(e) => changeImportUrl(e.target.value)}
-                          placeholder={t('xImport.placeholder')}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              void runXImport();
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="op-sp-btn-next shrink-0 whitespace-nowrap py-2"
-                          disabled={xImportBusy}
-                          onClick={() => void runXImport()}
-                        >
-                          {xImportBusy ? t('xImport.busy') : t('xImport.button')}
-                        </button>
-                      </div>
-                      {xImportError ? <p className="mt-2 text-xs text-[var(--coral)]">{xImportError}</p> : null}
-                      {renderXDuplicateHint()}
-                      {xImportOk ? <p className="mt-2 text-xs text-[var(--teal)]">{t('xImport.success')}</p> : null}
-                    </div>
-
-                    <div className="op-sp-form-group op-sp-two">
-                      <div>
-                        <label className="op-sp-label" htmlFor="f-source">
-                          {t('labels.sourceUrl')}
-                        </label>
-                        <input
-                          id="f-source"
-                          className="op-sp-input"
-                          type="url"
-                          inputMode="url"
-                          value={xImportUrl}
-                          onChange={(e) => changeSourceUrl(e.target.value)}
-                          placeholder={t('placeholders.source')}
-                        />
-                        <p className="op-sp-label op-hint">{t('hints.source')}</p>
-                      </div>
-                      <div>
-                        <label className="op-sp-label" htmlFor="f-author">
-                          {t('labels.author')}
-                        </label>
-                        <input
-                          id="f-author"
-                          className="op-sp-input"
-                          value={authorHandle}
-                          onChange={(e) => setAuthorHandle(e.target.value)}
-                          placeholder={t('placeholders.author')}
-                        />
-                        <p className="op-sp-label op-hint">{t('hints.author')}</p>
-                      </div>
-                    </div>
-
-                    <div className="op-sp-form-group">
-                      <label className="op-sp-label" htmlFor="f-title">
-                        {t('labels.templateTitle')} <span className="op-req">*</span>
-                        <span className="op-hint">{t('hints.title')}</span>
-                      </label>
-                      <input
-                        id="f-title"
-                        className={`op-sp-input${shakeId === 'f-title' ? ' op-shake' : ''}`}
-                        maxLength={MAX_TITLE}
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder={t('placeholders.title')}
-                      />
-                    </div>
-
-                    <div className="op-sp-form-group">
-                      <label className="op-sp-label" htmlFor="f-desc">
-                        {t('labels.shortDesc')}
-                        <span className="op-hint">{t('hints.desc')}</span>
-                      </label>
-                      <input
-                        id="f-desc"
-                        className="op-sp-input"
-                        maxLength={120}
-                        value={desc}
-                        onChange={(e) => setDesc(e.target.value)}
-                        placeholder={t('placeholders.desc')}
-                      />
-                    </div>
-
-                    <div className="op-sp-form-group">
-                      <label className="op-sp-label" htmlFor="f-model">
-                        {t('labels.model')} <span className="op-req">*</span>
-                      </label>
-                      <div className="op-sp-select-wrap">
-                        <select
-                          id="f-model"
-                          className="op-sp-select"
-                          value={modelId}
-                          onChange={(e) => setModelId(e.target.value as (typeof MODEL_IDS)[number])}
-                        >
-                          {MODEL_IDS.map((id) => (
-                            <option key={id} value={id}>
-                              {`${MODEL_EMOJI[id]} ${t(`models.${id}.name`)} · ${t(`models.${id}.tag`)}`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div
-                      id="f-category"
-                      className={`op-sp-form-group${shakeId === 'f-category' ? ' op-shake' : ''}`}
-                    >
-                      <label className="op-sp-label">
-                        {t('labels.category')} <span className="op-req">*</span>
-                      </label>
-                      <PromptCategoryStrip
-                        categoryId={category}
-                        onCategoryChange={handleCategoryPick}
-                        subTags={categorySubTags}
-                        subTag={null}
-                        onSubTagChange={handleCategorySubTagPick}
-                        categoryLabel={categoryLabelFn}
-                        subTagLabel={subTagLabelFn}
-                        showAll={false}
-                        selectedTags={tags}
-                      />
-                    </div>
-
-                    <div className="op-sp-form-group">
-                      <label className="op-sp-label" htmlFor="tag-input">
-                        {t('labels.tags')} <span className="op-req">*</span>
-                        <span className="op-hint">{t('hints.tags')}</span>
-                      </label>
-                      <div
-                        id="op-tag-wrap"
-                        className={`op-sp-tag-wrap${shakeId === 'tag-wrap' ? ' op-shake' : ''}`}
-                        onClick={() => document.getElementById('tag-input')?.focus()}
-                      >
-                        {tags.map((tag) => (
-                          <span key={tag} className="op-sp-tag-chip">
-                            {tag}{' '}
-                            <button type="button" onClick={() => removeTag(tag)}>
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                        <input
-                          id="tag-input"
-                          className="op-sp-tag-input"
-                          value={tagInput}
-                          onChange={(e) => setTagInput(e.target.value)}
-                          onKeyDown={onTagKeyDown}
-                          placeholder={t('placeholders.tagInput')}
-                        />
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap gap-1">
-                        {quickTags.map((tag) => (
-                          <button
-                            key={tag}
-                            type="button"
-                            className="op-sp-sugg"
-                            onClick={() => addTag(tag)}
+          <div className="op-submit-shell relative">
+            <div className="mx-auto w-full max-w-7xl px-6">
+              <div className={`op-sp-page${form.success ? ' op-sp-page--simple' : ''}`}>
+                <div className={`op-sp-form-area${form.success ? ' op-sp-form-area--simple' : ''}`}>
+                  {form.success ? (
+                    <SubmitSuccess
+                      locale={locale}
+                      isEditMode={isEditMode}
+                      isPrivateMode={isPrivateMode}
+                      authStatus={authStatus}
+                      modelId={form.modelId}
+                      category={form.category}
+                      submissionId={form.submissionId}
+                      onReset={resetForm}
+                    />
+                  ) : (
+                    <>
+                      <header className="mb-8">
+                        {!isEditMode ? (
+                          <Link
+                            href={submitChooserPath}
+                            className="mb-4 inline-block text-xs text-[var(--text3)] hover:text-[var(--amber)]"
                           >
-                            {tag}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="op-sp-form-group">
-                      <label className="op-sp-label" htmlFor="f-prompt">
-                        {t('labels.prompt')} <span className="op-req">*</span>
-                        <span className="op-hint">{t('hints.promptCount', { count: prompt.length })}</span>
-                      </label>
-                      <textarea
-                        id="f-prompt"
-                        className={`op-sp-textarea${shakeId === 'f-prompt' ? ' op-shake' : ''}`}
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        placeholder={t('placeholders.prompt')}
-                      />
-                    </div>
-
-                    <div className="op-sp-divider">{t('guidelines.dividerImages')}</div>
-
-                    <div className="op-sp-form-group">
-                      <div className="mb-2 flex items-baseline justify-between gap-2">
-                        <label className="op-sp-label !mb-0">
-                          {t('labels.upload')}
-                          <span className="op-hint">{t('hints.upload')}</span>
-                        </label>
-                        <span className="shrink-0 font-mono text-[10px] text-[var(--text3)]">
-                          {t('hints.imageCount', { count: resultImages.length, max: MAX_RESULT_IMAGES })}
-                        </span>
-                      </div>
-                      <div
-                        id="upload-zone"
-                        className={`op-sp-upload${uploadDrag ? ' op-drag' : ''}${imagesFull ? ' op-sp-upload--full' : ''}`}
-                        onDragOver={(e) => {
-                          if (imagesFull) return;
-                          e.preventDefault();
-                          setUploadDrag(true);
-                        }}
-                        onDragLeave={() => setUploadDrag(false)}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          setUploadDrag(false);
-                          handleFiles(e.dataTransfer.files);
-                        }}
-                      >
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          disabled={imagesFull}
-                          onChange={(e) => handleFiles(e.target.files)}
-                        />
-                        <div className="text-sm font-medium text-[var(--text)]">{imagesFull ? '✓' : '↑'}</div>
-                        <div className="mt-1 text-xs text-[var(--text3)]">
-                          {imagesFull ? t('hints.uploadFull') : t('hints.upload')}
-                        </div>
-                      </div>
-
-                      <div className="mt-4">
-                        <label className="op-sp-label" htmlFor="f-img-url">
-                          {t('labels.imageUrls')}
-                          <span className="op-hint">{t('hints.urls')}</span>
-                        </label>
-                        <div className="op-sp-source-row">
-                          <input
-                            id="f-img-url"
-                            className="op-sp-input"
-                            value={urlDraft}
-                            disabled={imagesFull}
-                            onChange={(e) => {
-                              setUrlDraft(e.target.value);
-                              setUrlError(null);
-                            }}
-                            onKeyDown={onUrlKeyDown}
-                            placeholder={t('placeholders.urls')}
-                          />
-                          <button
-                            type="button"
-                            className="op-sp-btn-next shrink-0 px-4 py-2 text-xs"
-                            disabled={imagesFull || !urlDraft.trim()}
-                            onClick={addImageUrl}
-                          >
-                            {t('buttons.addUrl')}
-                          </button>
-                        </div>
-                        {urlError ? (
-                          <p className="mt-1.5 text-xs text-[var(--coral)]">{urlError}</p>
+                            {t('chooser.back')}
+                          </Link>
                         ) : null}
-                      </div>
-
-                      {resultImages.length > 0 ? (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {resultImages.map((src, i) => (
-                            <div
-                              key={`${i}-${src.slice(0, 32)}`}
-                              className="relative h-16 w-[5.5rem] overflow-hidden rounded-md border border-[var(--border2)] bg-[var(--surface2)]"
-                            >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={src} alt="" className="h-full w-full object-cover" />
-                              <button
-                                type="button"
-                                className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-[10px] text-white hover:bg-black/90"
-                                aria-label={t('buttons.removeImage')}
-                                onClick={() => removeImage(i)}
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="op-sp-form-group rounded-lg border border-[var(--border2)] bg-[var(--surface2)] p-4">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-medium text-[var(--text2)]">{t('qualityCheck')}</span>
-                        <button
-                          id="op-sp-copy-btn"
-                          type="button"
-                          className="shrink-0 rounded border border-[var(--border2)] px-2 py-0.5 text-[10px] text-[var(--text3)] hover:text-[var(--amber)]"
-                          onClick={copyPrompt}
-                        >
-                          {t('buttons.copyPrompt')}
-                        </button>
-                      </div>
-                      {(
-                        [
-                          ['rules.promptLen', promptLenOk],
-                          ['rules.title', titleOk],
-                          ['rules.model', modelOk],
-                          ['rules.category', categoryOk],
-                          ['rules.tags', tagsOk],
-                        ] as const
-                      ).map(([key, ok]) => (
-                        <div
-                          key={key}
-                          className="flex gap-2 border-b border-[var(--border)] py-1.5 text-[11px] text-[var(--text2)] last:border-0"
-                        >
-                          <span className={`op-sp-rule-icon ${ok ? 'ok' : 'no'}`}>{ok ? '✓' : '✕'}</span>
-                          <span>{t(key)}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {blockedHint ? (
-                      <div
-                        role="alert"
-                        className="mb-3 rounded-lg border border-[color-mix(in_oklab,var(--coral)_35%,transparent)] bg-[var(--coral-dim)] px-3 py-2 text-xs leading-snug text-[var(--coral)]"
-                      >
-                        {blockedHint}
-                      </div>
-                    ) : null}
-
-                    <div className="op-sp-form-nav mt-8 justify-end border-0 pt-2">
-                      <button
-                        type="button"
-                        className="op-sp-btn-next op-submit"
-                        disabled={submitting}
-                        aria-busy={submitting}
-                        onClick={() => void doSubmit()}
-                      >
-                        {submitting
-                          ? t('buttons.submitting')
-                          : isEditMode
-                            ? t('editMode.save')
+                        <div className="op-sp-wizard-eyebrow">
+                          {isEditMode
+                            ? t('editMode.eyebrow')
                             : isPrivateMode
-                              ? t('privateMode.submit')
-                              : t('buttons.submit')}
-                      </button>
-                    </div>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <div className="op-sp-success op-show">
-                    <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[rgba(45,212,160,0.3)] bg-[var(--teal-dim)] text-2xl">
-                      🎉
-                    </div>
-                    <h2 className="mb-2 text-2xl font-semibold">
-                      {isEditMode
-                        ? t('editMode.successTitle')
-                        : isPrivateMode
-                          ? t('privateMode.successTitle')
-                          : t('success.title')}
-                      <em className="italic text-[var(--teal)]">
-                        {isEditMode
-                          ? t('editMode.successTitleEm')
-                          : isPrivateMode
-                            ? t('privateMode.successTitleEm')
-                            : t('success.titleEm')}
-                      </em>
-                    </h2>
-                    <p className="mx-auto mb-6 max-w-[340px] text-sm font-light leading-relaxed text-[var(--text2)]">
-                      {isEditMode
-                        ? t('editMode.successBody')
-                        : isPrivateMode
-                          ? t('privateMode.successBody')
-                          : authStatus === 'authenticated'
-                            ? t('success.body')
-                            : t('success.bodySignedOut')}
-                    </p>
-                    <p className="mb-4 text-center text-[11px] text-[var(--text3)]">
-                      {modelLabel}
-                      {categoryLabel ? ` · ${categoryLabel}` : null}
-                    </p>
-                    <div className="flex flex-wrap justify-center gap-2">
-                      {isEditMode || isPrivateMode ? (
-                        <Link href={accountHref(locale)} className="op-sp-btn-next">
-                          {t('privateMode.goToMyTemplates')}
-                        </Link>
-                      ) : (
-                        <Link href={galleryHref} className="op-sp-btn-next">
-                          {t('buttons.browseGallery')}
-                        </Link>
-                      )}
-                      <button type="button" className="op-sp-btn-back" onClick={resetForm}>
-                        {isEditMode
-                          ? t('editMode.continueEdit')
-                          : isPrivateMode
-                            ? t('privateMode.createAnother')
-                            : t('buttons.submitAnother')}
-                      </button>
-                      {!isEditMode && !isPrivateMode ? (
-                        <Link href={accountHref(locale)} className="op-sp-btn-back">
-                          {t('buttons.myTemplates')}
-                        </Link>
+                              ? t('privateMode.eyebrow')
+                              : t('wizard.eyebrow')}
+                        </div>
+                        <h1 className="op-sp-wizard-title">
+                          {isEditMode ? (
+                            <>
+                              {t('editMode.title')}
+                              <em>{t('editMode.titleEm')}</em>
+                            </>
+                          ) : isPrivateMode ? (
+                            <>
+                              {t('privateMode.title')}
+                              <em>{t('privateMode.titleEm')}</em>
+                            </>
+                          ) : (
+                            <>
+                              {t('wizard.title')}
+                              <em>{t('wizard.titleEm')}</em>
+                            </>
+                          )}
+                        </h1>
+                        <p className="op-sp-wizard-sub">
+                          {isEditMode
+                            ? t('editMode.subtitle')
+                            : isPrivateMode
+                              ? t('privateMode.subtitle')
+                              : t('wizard.subtitleSimple')}
+                        </p>
+                      </header>
+
+                      {isEditMode && loadError ? (
+                        <div className="op-sp-info mb-6 border-[var(--coral)]/40">
+                          <p className="text-[var(--coral)]">{loadError}</p>
+                          <Link
+                            href={accountPanelHref(locale, 'prompts')}
+                            className="mt-2 inline-block text-sm text-[var(--amber)]"
+                          >
+                            {t('editMode.backToTemplates')}
+                          </Link>
+                        </div>
                       ) : null}
-                    </div>
-                    <p className="mt-4 font-mono text-[11px] text-[var(--text3)]">
-                      {t('success.idLabel', { id: submissionId })}
-                    </p>
-                  </div>
-                )}
+
+                      {isEditMode && loadingTemplate ? (
+                        <p className="mb-6 text-sm text-[var(--text2)]">{t('editMode.loading')}</p>
+                      ) : null}
+
+                      {!editorUnavailable ? (
+                        <>
+                          <SourceImport
+                            url={form.xImportUrl}
+                            authorHandle={form.authorHandle}
+                            busy={xImport.busy}
+                            error={xImport.error}
+                            succeeded={xImport.succeeded}
+                            duplicate={xImport.duplicate}
+                            onImportUrlChange={xImport.changeImportUrl}
+                            onSourceUrlChange={xImport.changeSourceUrl}
+                            onAuthorHandleChange={form.setAuthorHandle}
+                            onImport={xImport.runImport}
+                          />
+                          <PromptFields
+                            quickTags={quickTags}
+                            title={form.title}
+                            description={form.desc}
+                            modelId={form.modelId}
+                            category={form.category}
+                            tags={form.tags}
+                            prompt={form.prompt}
+                            shakeId={submitWorkflow.shakeId}
+                            onTitleChange={form.setTitle}
+                            onDescriptionChange={form.setDesc}
+                            onModelChange={form.setModelId}
+                            onCategoryChange={form.setCategory}
+                            onAddTag={form.addTag}
+                            onRemoveTag={form.removeTag}
+                            onPromptChange={form.setPrompt}
+                          />
+                          <AssetEditor
+                            images={form.resultImages}
+                            imagesFull={form.imagesFull}
+                            onAppendImages={form.appendImages}
+                            onAddImage={form.addImageUrl}
+                            onRemoveImage={form.removeImage}
+                          />
+                          <VisibilitySection
+                            isEditMode={isEditMode}
+                            isPrivateMode={isPrivateMode}
+                            submitting={submitWorkflow.submitting}
+                            blockedHint={submitWorkflow.blockedHint}
+                            prompt={form.prompt}
+                            checks={validationChecks}
+                            onSubmit={submitWorkflow.submit}
+                          />
+                        </>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+
+                {!form.success && !editorUnavailable ? (
+                  <SubmitLivePreview
+                    title={form.title}
+                    description={form.desc}
+                    prompt={form.prompt}
+                    modelId={form.modelId}
+                    category={form.category}
+                    tags={form.tags}
+                    images={form.previewImageUrls}
+                  />
+                ) : null}
               </div>
-
-              {!success && !(isEditMode && (loadingTemplate || loadError)) ? (
-                <aside className="op-sp-preview-pane">
-                  <div className="op-sp-pane-h">
-                    <span className="text-xs font-medium tracking-wide text-[var(--text2)]">{t('preview.paneTitle')}</span>
-                    <span className="flex items-center gap-1 text-[10px] text-[var(--teal)]">
-                      <span className="inline-block h-1 w-1 rounded-full bg-[var(--teal)]" />
-                      {t('preview.live')}
-                    </span>
-                  </div>
-                  <div className="op-sp-pane-body">
-                    <div className="op-sp-card">
-                      <div className="op-sp-card-media">
-                        <SubmitPreviewImageStrip
-                          images={previewImageUrls}
-                          titleLabel={title.trim() || t('preview.titleEmpty')}
-                          coverLoadFailedText={tGallery('coverLoadFailed')}
-                          emptyLabel={t('preview.uploadPlaceholder')}
-                        />
-                      </div>
-                      <div className="p-3">
-                        <div className="mb-2 flex items-center gap-1 text-[10px] text-[var(--text3)]">
-                          <span>◎</span> {modelLabel}
-                        </div>
-                        <div
-                          className={`mb-1 text-sm font-medium ${title.trim() ? 'text-[var(--text)]' : 'italic text-[var(--text3)]'}`}
-                        >
-                          {title.trim() || t('preview.titleEmpty')}
-                        </div>
-                        <div className="mb-2 min-h-[2rem] text-[11px] text-[var(--text3)]">
-                          {desc.trim() || t('preview.descEmpty')}
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="rounded border border-[var(--border)] bg-[var(--surface2)] px-2 py-0.5 text-[10px] text-[var(--text3)]">
-                            {categoryLabel || t('preview.categoryFallback')}
-                          </span>
-                          <span className="rounded-md bg-[var(--amber)] px-2 py-1 text-[11px] font-medium text-[#0e0d0b]">
-                            {t('preview.generateCta')}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="op-sp-code-block">
-                      <div className="mb-1 flex items-center justify-between text-[9px] uppercase tracking-wide text-[var(--text3)]">
-                        {t('labels.prompt')}
-                        <button
-                          type="button"
-                          className="rounded border border-[var(--border2)] px-1.5 py-0.5 text-[10px] text-[var(--text3)] hover:text-[var(--amber)]"
-                          onClick={copyPrompt}
-                          title={t('buttons.copyPrompt')}
-                        >
-                          {t('buttons.copyPrompt')}
-                        </button>
-                      </div>
-                      <p className={prompt.trim() ? '' : 'italic text-[var(--text3)]'}>
-                        {prompt.trim() || t('preview.promptEmpty')}
-                      </p>
-                    </div>
-
-                    <div className="mb-3 flex flex-wrap gap-1">
-                      {tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="rounded border border-[color-mix(in_oklab,var(--amber)_20%,transparent)] bg-[var(--amber-dim)] px-2 py-0.5 text-[10px] text-[var(--amber)]"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </aside>
-              ) : null}
             </div>
           </div>
-        </div>
         )}
       </main>
       <OpenPromptsSiteFooter locale={locale} />

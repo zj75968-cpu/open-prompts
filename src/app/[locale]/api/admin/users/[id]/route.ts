@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { AdminUserResponseDto } from '~/lib/account/account-dto';
 import { getDb } from '~/db/client';
 import { requireAdminSession } from '~/lib/auth/session';
 import { getUserById } from '~/lib/users/admin-user-record';
@@ -27,7 +28,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   try {
     const item = await getUserById(db, id);
     if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    return NextResponse.json({ item });
+    const response: AdminUserResponseDto = { item };
+    return NextResponse.json(response);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Load failed';
     console.error('[admin/users GET id]', e);

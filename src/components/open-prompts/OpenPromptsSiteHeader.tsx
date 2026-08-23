@@ -5,7 +5,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
-import { FaGithub } from 'react-icons/fa';
 import { languages, locales } from '~/config';
 import { UserAvatar } from '~/components/open-prompts/UserAvatar';
 import { applyOpThemeToDocument, getOpDocumentTheme } from '~/lib/op-theme';
@@ -40,8 +39,6 @@ export type OpenPromptsSiteHeaderProps = {
   langPathSuffix?: string;
   /** Tailwind z-index class for sticky stacking (create uses z-50). */
   stickyZClass?: string;
-  githubAriaLabel?: string;
-  githubTitle?: string;
   /** Extra text after submit CTA label (create uses ` →`). */
   submitCtaSuffix?: string;
 };
@@ -55,8 +52,6 @@ export function OpenPromptsSiteHeader({
   activeNav,
   langPathSuffix = '',
   stickyZClass = 'z-30',
-  githubAriaLabel,
-  githubTitle,
   submitCtaSuffix = '',
 }: OpenPromptsSiteHeaderProps) {
   const t = useTranslations('OpenPrompts');
@@ -66,9 +61,6 @@ export function OpenPromptsSiteHeader({
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const langWrapRef = useRef<HTMLDivElement | null>(null);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
-
-  const ghAria = githubAriaLabel ?? 'GitHub repository';
-  const ghTitle = githubTitle ?? 'GitHub';
 
   const displayName = useMemo(() => {
     const u = session?.user;
@@ -165,16 +157,6 @@ export function OpenPromptsSiteHeader({
           ))}
         </nav>
         <div className="flex items-center gap-2">
-          <a
-            href="https://github.com/rudy2steiner/open-prompts"
-            target="_blank"
-            rel="noreferrer"
-            className="grid h-9 w-9 place-items-center rounded-xl border border-[var(--ctl-border)] bg-[var(--ctl-bg)] text-[var(--text2)] shadow-sm hover:bg-[var(--ctl-hover)] hover:text-[var(--text)]"
-            aria-label={ghAria}
-            title={ghTitle}
-          >
-            <FaGithub className="h-4 w-4" aria-hidden="true" />
-          </a>
           <button
             type="button"
             className="grid h-9 w-9 grid-cols-1 grid-rows-1 place-items-center rounded-xl border border-[var(--ctl-border)] bg-[var(--ctl-bg)] text-[var(--text2)] shadow-sm hover:bg-[var(--ctl-hover)] hover:text-[var(--text)]"

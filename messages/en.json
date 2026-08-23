@@ -1277,8 +1277,6 @@
       "ratioUltraWide": "Ultra-wide ({ratio})",
       "ratioLandscape": "Landscape ({ratio})",
       "ratioPortrait": "Portrait ({ratio})",
-      "githubRepoAriaLabel": "GitHub repository",
-      "githubTitle": "GitHub",
       "hero": {
         "title": "Better prompts Better images",
         "titleLine1": "Better prompts",

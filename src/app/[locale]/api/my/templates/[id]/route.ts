@@ -1,4 +1,10 @@
 import { NextResponse } from 'next/server';
+import type {
+  PromptDeleteResponseDto,
+  PromptTemplateMutationResponseDto,
+  PromptTemplateResponseDto,
+  PromptWriteRequestDto,
+} from '~/lib/prompts/prompt-dto';
 import { getDb } from '~/db/client';
 import { isAdminEmail, requireAuthSession } from '~/lib/auth/session';
 import { parseTemplateBody } from '~/lib/prompts/parse-template-body';
@@ -37,7 +43,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  return NextResponse.json({ item });
+  const response: PromptTemplateResponseDto = { item };
+  return NextResponse.json(response);
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -53,9 +60,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const id = parseId(raw);
   if (!id) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
-  let body: unknown;
+  let body: PromptWriteRequestDto;
   try {
-    body = await req.json();
+    body = (await req.json()) as PromptWriteRequestDto;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
@@ -91,7 +98,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       isAdmin,
     );
     if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    return NextResponse.json({ ok: true, item });
+    const response: PromptTemplateMutationResponseDto = { ok: true, item };
+    return NextResponse.json(response);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Update failed';
     console.error('[my/templates PATCH]', e);
@@ -115,5 +123,6 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const isAdmin = isAdminEmail(session.user.email);
   const ok = await deleteUserTemplate(db, id, session.user.id, isAdmin);
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json({ ok: true });
+  const response: PromptDeleteResponseDto = { ok: true };
+  return NextResponse.json(response);
 }

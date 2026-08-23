@@ -1,3 +1,7 @@
+import type {
+  GenerationApiResponseDto,
+  GenerationPollResponseDto,
+} from '~/lib/generation/generation-dto';
 import { resolveGenerationProvider } from '~/lib/generation/provider-runtime';
 import { decodeProviderJobId } from '~/lib/generation/registry';
 
@@ -11,7 +15,10 @@ function safeId() {
 export async function pollGeneration(args: {
   encodedProviderJobId: string;
   apiKey: string;
-}) {
+}): Promise<{
+  status: number;
+  body: GenerationApiResponseDto<GenerationPollResponseDto>;
+}> {
   const requestId = safeId();
   const startedAt = Date.now();
   const useTestMode = String(process.env.USE_TEST_MODE || '').toLowerCase() === 'true';

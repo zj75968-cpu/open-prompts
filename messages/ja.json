@@ -1325,8 +1325,6 @@
       "ratioUltraWide": "超ワイド（{ratio}）",
       "ratioLandscape": "横長（{ratio}）",
       "ratioPortrait": "縦長（{ratio}）",
-      "githubRepoAriaLabel": "GitHub リポジトリ",
-      "githubTitle": "GitHub",
       "hero": {
         "title": "より良いプロンプト より良い画像",
         "titleLine1": "より良いプロンプト",

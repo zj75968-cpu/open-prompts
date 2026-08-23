@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+import type {
+  AdminTemplatesBulkReviewRequestDto,
+  AdminTemplatesBulkReviewResponseDto,
+} from '~/lib/account/account-dto';
 import { getDb } from '~/db/client';
 import { requireAdminSession } from '~/lib/auth/session';
 import { adminBulkSetReviewStatus, parseReviewStatus } from '~/lib/prompts/template-record';
@@ -24,9 +28,9 @@ export async function PATCH(req: Request) {
   const db = getDb();
   if (!db) return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
 
-  let body: { ids?: unknown; status?: string };
+  let body: Partial<AdminTemplatesBulkReviewRequestDto>;
   try {
-    body = await req.json();
+    body = (await req.json()) as Partial<AdminTemplatesBulkReviewRequestDto>;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
@@ -44,7 +48,11 @@ export async function PATCH(req: Request) {
 
   try {
     const updated = await adminBulkSetReviewStatus(db, ids, status);
-    return NextResponse.json({ ok: true, updated });
+    const response: AdminTemplatesBulkReviewResponseDto = {
+      ok: true,
+      updated,
+    };
+    return NextResponse.json(response);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Bulk update failed';
     console.error('[admin/templates/bulk PATCH]', e);

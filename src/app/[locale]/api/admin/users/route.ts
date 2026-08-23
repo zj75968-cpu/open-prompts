@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+import type {
+  AdminUsersPageResponseDto,
+  AdminUsersQueryDto,
+} from '~/lib/account/account-dto';
 import { getDb } from '~/db/client';
 import { requireAdminSession } from '~/lib/auth/session';
 import { listUsers, getAdminUserStats } from '~/lib/users/admin-user-record';
@@ -16,13 +20,20 @@ export async function GET(req: Request) {
   if (!db) return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
 
   const url = new URL(req.url);
-  const q = url.searchParams.get('q') ?? undefined;
-  const limit = Number(url.searchParams.get('limit') ?? 20);
-  const offset = Number(url.searchParams.get('offset') ?? 0);
-  const trendDays = normalizeTrendDays(url.searchParams.get('trendDays'));
+  const query: AdminUsersQueryDto = {
+    q: url.searchParams.get('q') ?? undefined,
+    limit: Number(url.searchParams.get('limit') ?? 20),
+    offset: Number(url.searchParams.get('offset') ?? 0),
+    trendDays: normalizeTrendDays(url.searchParams.get('trendDays')),
+  };
+  const trendDays = query.trendDays ?? 30;
 
   try {
-    const result = await listUsers(db, { q, limit, offset });
+    const result = await listUsers(db, {
+      q: query.q,
+      limit: query.limit,
+      offset: query.offset,
+    });
 
     let userStats: Awaited<ReturnType<typeof getAdminUserStats>> = {
       totalUsers: 0,
@@ -37,7 +48,11 @@ export async function GET(req: Request) {
       console.error('[admin/users GET] stats failed', statsErr);
     }
 
-    return NextResponse.json({ ...result, stats: userStats });
+    const response: AdminUsersPageResponseDto = {
+      ...result,
+      stats: userStats,
+    };
+    return NextResponse.json(response);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'List failed';
     console.error('[admin/users GET]', e);

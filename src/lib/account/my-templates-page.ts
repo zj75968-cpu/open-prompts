@@ -15,20 +15,6 @@ export function myTemplatesPageKey(
   return `${search.trim()}|${statusFilter}|${page}|${pageSize}`;
 }
 
-export function buildMyTemplatesQuery(
-  search: string,
-  statusFilter: string,
-  page: number,
-  pageSize: number,
-): URLSearchParams {
-  const q = new URLSearchParams();
-  if (search.trim()) q.set('q', search.trim());
-  if (statusFilter) q.set('status', statusFilter);
-  q.set('limit', String(pageSize));
-  q.set('offset', String((page - 1) * pageSize));
-  return q;
-}
-
 export function parseMyTemplatesPage(
   data: { items?: TemplateRecord[]; total?: number; offset?: number },
   page: number,

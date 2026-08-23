@@ -1,4 +1,12 @@
 import { NextResponse } from 'next/server';
+import type {
+  AccountTemplatesPageResponseDto,
+  MyTemplatesQueryDto,
+} from '~/lib/account/account-dto';
+import type {
+  PromptTemplateMutationResponseDto,
+  PromptWriteRequestDto,
+} from '~/lib/prompts/prompt-dto';
 import { getDb } from '~/db/client';
 import { requireAuthSession } from '~/lib/auth/session';
 import { parseTemplateBody } from '~/lib/prompts/parse-template-body';
@@ -22,22 +30,27 @@ export async function GET(req: Request) {
   if (!db) return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
 
   const url = new URL(req.url);
-  const q = url.searchParams.get('q') ?? undefined;
-  const status = parseReviewStatus(url.searchParams.get('status') ?? '') ?? undefined;
-  const visibility = parseVisibility(url.searchParams.get('visibility') ?? '') ?? undefined;
-  const limit = Number(url.searchParams.get('limit') ?? 20);
-  const offset = Number(url.searchParams.get('offset') ?? 0);
+  const query: MyTemplatesQueryDto = {
+    q: url.searchParams.get('q') ?? undefined,
+    status: url.searchParams.get('status') ?? undefined,
+    visibility: url.searchParams.get('visibility') ?? undefined,
+    limit: Number(url.searchParams.get('limit') ?? 20),
+    offset: Number(url.searchParams.get('offset') ?? 0),
+  };
+  const status = parseReviewStatus(query.status ?? '') ?? undefined;
+  const visibility = parseVisibility(query.visibility ?? '') ?? undefined;
 
   try {
     const result = await listTemplates(db, {
       userId: session.user.id,
-      q,
+      q: query.q,
       status,
       visibility,
-      limit,
-      offset,
+      limit: query.limit,
+      offset: query.offset,
     });
-    return NextResponse.json(result);
+    const response: AccountTemplatesPageResponseDto = result;
+    return NextResponse.json(response);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'List failed';
     console.error('[my/templates GET]', e);
@@ -54,9 +67,9 @@ export async function POST(req: Request) {
   const db = getDb();
   if (!db) return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
 
-  let body: unknown;
+  let body: PromptWriteRequestDto;
   try {
-    body = await req.json();
+    body = (await req.json()) as PromptWriteRequestDto;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
@@ -84,7 +97,8 @@ export async function POST(req: Request) {
       sourceUrl: v.sourceUrl,
       authorHandle: v.authorHandle,
     });
-    return NextResponse.json({ ok: true, item });
+    const response: PromptTemplateMutationResponseDto = { ok: true, item };
+    return NextResponse.json(response);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Create failed';
     console.error('[my/templates POST]', e);
