@@ -128,16 +128,18 @@ For sign-in and admin:
 | `ADMIN_EMAIL` | Comma-separated admin emails (must match login email exactly) |
 | `ADMIN_PASSWORD` | Min 8 characters; synced to DB on boot / admin login |
 
-For image generation (Atlas Cloud or test mode):
+For image generation (the configured OpenAI-compatible provider, optional Atlas Cloud/Replicate providers, or test mode):
 
 | Variable | Purpose |
 |----------|---------|
-| `DEFAULT_IMAGE_PROVIDER` | `atlascloud` (Replicate is not supported yet) |
-| `ATLASCLOUD_API_KEY` | [Atlas Cloud](https://www.atlascloud.ai) API key |
+| `DEFAULT_IMAGE_PROVIDER` | `openai-compatible` by default; `atlascloud` and `replicate` are optional alternatives |
+| `OPENAI_IMAGE_BASE_URL` / `OPENAI_IMAGE_API_KEY` | Server-side OpenAI-compatible image API configuration |
+| `OPENAI_IMAGE_MODEL` | Image model name, e.g. `gpt-image-2` |
+| `ATLASCLOUD_BASE_URL` / `ATLASCLOUD_API_KEY` | Optional [Atlas Cloud](https://www.atlascloud.ai) provider configuration |
 | `USE_TEST_MODE` | `true` to skip real API calls |
 | `TEST_IMAGE_URL` | Image URL returned in test mode |
 
-See [`.env.example`](.env.example) for credits limits and optional OpenAI settings.
+See [`.env.example`](.env.example) for credits limits and the complete provider configuration.
 
 ### 3. Database
 
@@ -203,11 +205,12 @@ This app uses [@opennextjs/cloudflare](https://opennext.js.org/cloudflare) to ru
 
 | Provider | Status | Configuration |
 |----------|--------|----------------|
-| **Atlas Cloud** | Supported | `ATLASCLOUD_API_KEY`, `ATLASCLOUD_BASE_URL` |
-| **Replicate** | Planned (not supported) | Env keys exist in `.env.example` for future use; do not set `DEFAULT_IMAGE_PROVIDER=replicate` yet |
+| **OpenAI-compatible** | Supported and used by default | `OPENAI_IMAGE_BASE_URL`, `OPENAI_IMAGE_API_KEY`, `OPENAI_IMAGE_MODEL` |
+| **Atlas Cloud** | Optional | `ATLASCLOUD_API_KEY`, `ATLASCLOUD_BASE_URL` |
+| **Replicate** | Optional | `REPLICATE_API_TOKEN`, `REPLICATE_MODEL` or `REPLICATE_VERSION` |
 | **Test mode** | Dev / demo | `USE_TEST_MODE=true`, `TEST_IMAGE_URL` |
 
-On the Create page, users can optionally override the API key in the browser (`localStorage`); prefer server-side keys in production.
+A+ Studio reuses the configured OpenAI-compatible provider, including reference-image edits. Atlas Cloud is not required. On the Create page, users can optionally override the API key in the browser (`localStorage`) for BYOK providers; prefer server-side keys in production.
 
 ---
 

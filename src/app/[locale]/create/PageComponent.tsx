@@ -171,6 +171,8 @@ export default function PageComponent({ locale, prompts }: Props) {
   const internalConfigHint = useMemo(() => {
     if (provider !== 'internal' || !error) return null;
     const missingConfiguration =
+      error.includes('Missing OPENAI_IMAGE_BASE_URL') ||
+      error.includes('Missing OPENAI_IMAGE_API_KEY') ||
       error.includes('Missing ATLASCLOUD_BASE_URL') ||
       error.includes('Missing ATLASCLOUD_API_KEY') ||
       error.includes('Missing REPLICATE_API_TOKEN') ||

@@ -298,6 +298,7 @@
       "account": "Account",
       "rank": "Leaderboard",
       "docs": "Docs",
+      "aPlus": "A+ Studio",
       "submitCta": "Share a prompt"
     },
     "submitPage": {
@@ -1360,11 +1361,64 @@
         "steps": [
           "For local dev, copy `.env.example` → `.env.local`",
           "Configure at least one provider:",
-          "- AtlasCloud: `ATLASCLOUD_BASE_URL` + `ATLASCLOUD_API_KEY`",
-          "- Replicate: `REPLICATE_API_TOKEN` + (`REPLICATE_MODEL` or `REPLICATE_VERSION`)",
+          "- OpenAI-compatible image API: `OPENAI_IMAGE_BASE_URL` + `OPENAI_IMAGE_API_KEY`",
+          "- AtlasCloud (optional): `ATLASCLOUD_BASE_URL` + `ATLASCLOUD_API_KEY`",
+          "- Replicate (optional): `REPLICATE_API_TOKEN` + (`REPLICATE_MODEL` or `REPLICATE_VERSION`)",
           "Restart `npm run dev` and retry"
         ]
       }
+    }
+  },
+  "APlus": {
+    "seo": {
+      "title": "A+ Studio — Generate ecommerce product image sets",
+      "description": "Turn one product image and a few selling points into a cohesive A+ ecommerce image set."
+    },
+    "eyebrow": "A+ STUDIO",
+    "title": "Build your product story with",
+    "titleEm": "A+ images",
+    "intro": "Upload one product image, add the facts that matter, and let the studio plan a clear five-image ecommerce story.",
+    "tabs": { "label": "A+ studio views", "create": "Create set", "results": "Generated set" },
+    "rail": {
+      "sourceTitle": "SOURCE PRODUCT",
+      "autoTitle": "Automatic workflow",
+      "autoBody": "The background workflow handles product facts, module planning, generation, and quality checks without adding extra controls here.",
+      "planTitle": "SET PLAN",
+      "planTip": "Each module answers one buyer question. You can regenerate one module without rebuilding the whole set."
+    },
+    "source": { "alt": "Product source", "empty": "No product image selected", "ready": "Source ready", "waiting": "Waiting for image" },
+    "create": { "title": "Tell us about the product", "subtitle": "Only the inputs needed to create a useful A+ set.", "badge": "5 modules", "footerHint": "Generation uses your existing Open Prompts credits and provider settings." },
+    "upload": { "title": "Upload product image", "description": "Use a clear product photo. Product identity should remain consistent across every module." },
+    "fields": {
+      "productName": "Product name",
+      "productNamePlaceholder": "e.g. Adjustable desk lamp",
+      "category": "Category",
+      "categoryPlaceholder": "e.g. Home office",
+      "sellingPoints": "Selling points",
+      "sellingPointsPlaceholder": "One point per line — material, structure, use case, fit…",
+      "sellingPointsHint": "Add 3–7 confirmed points. Unsupported claims are not added to the image brief.",
+      "platform": "Target platform",
+      "language": "Image language"
+    },
+    "options": { "genericCommerce": "General ecommerce" },
+    "actions": { "changeImage": "Change image", "selectImage": "Select image", "generating": "Generating…", "generate": "Generate A+ set", "exportAll": "Download all", "rerun": "Regenerate", "download": "Download", "back": "Edit inputs" },
+    "results": {
+      "generatingTitle": "Generating your A+ set",
+      "generatingBody": "The studio is generating each module and polling the existing provider jobs.",
+      "title": "Your A+ set is ready",
+      "body": "Review the modules below, regenerate one image, or download the completed set.",
+      "automationHint": "Product consistency, factual boundaries, and visual QA are handled by the workflow.",
+      "pendingImage": "Waiting for generation"
+    },
+    "status": { "planned": "Planned", "generating": "Generating", "completed": "Completed", "failed": "Needs retry", "partial": "Partially completed" },
+    "errors": { "missingFields": "Add an image, product name, category, and at least one selling point before generating.", "invalidImage": "Use a PNG, JPEG, or WebP image smaller than 10 MB.", "moduleFailed": "This module could not be generated.", "noImages": "There are no completed images to download." },
+    "notices": { "imageReady": "Product image selected.", "completed": "A+ set completed.", "partial": "Some modules need attention. You can regenerate them individually.", "moduleUpdated": "Module updated.", "moduleFailed": "Module generation failed. Try again with a different attempt.", "exported": "Download links opened for the completed images." },
+    "modules": {
+      "ad01": { "title": "Product positioning", "role": "Hero visual and product promise", "question": "What is this product and who is it for?", "visual": "Show the complete product as the clear hero with restrained brand context." },
+      "ad02": { "title": "Problem to solution", "role": "Buyer pain point and solution", "question": "What problem does it solve?", "visual": "Show a credible use situation and the product improving that situation." },
+      "ad03": { "title": "Core feature proof", "role": "Claim, proof, and mechanism", "question": "Why should I believe the main benefit?", "visual": "Use a product detail or mechanism-focused composition as visual proof." },
+      "ad04": { "title": "Material and details", "role": "Structure, material, and close-up", "question": "Does the product feel trustworthy?", "visual": "Make confirmed physical details easy to inspect without inventing components." },
+      "ad05": { "title": "Use in context", "role": "Scene and intended user", "question": "How will this fit my life?", "visual": "Show a realistic context with clear scale and a natural product interaction." }
     }
   }
 }

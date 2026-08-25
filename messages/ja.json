@@ -319,6 +319,7 @@
       "account": "アカウント",
       "rank": "ランキング",
       "docs": "ドキュメント",
+      "aPlus": "A+ Studio",
       "submitCta": "プロンプトを共有"
     },
     "submitPage": {
@@ -1408,11 +1409,38 @@
         "steps": [
           "ローカル開発では `.env.example` を `.env.local` にコピー",
           "少なくとも 1 つの Provider を設定:",
-          "- AtlasCloud: `ATLASCLOUD_BASE_URL` + `ATLASCLOUD_API_KEY`",
-          "- Replicate: `REPLICATE_API_TOKEN` + (`REPLICATE_MODEL` または `REPLICATE_VERSION`)",
+          "- OpenAI互換画像 API: `OPENAI_IMAGE_BASE_URL` + `OPENAI_IMAGE_API_KEY`",
+          "- AtlasCloud（任意）: `ATLASCLOUD_BASE_URL` + `ATLASCLOUD_API_KEY`",
+          "- Replicate（任意）: `REPLICATE_API_TOKEN` + (`REPLICATE_MODEL` または `REPLICATE_VERSION`)",
           "`npm run dev` を再起動して再試行"
         ]
       }
+    }
+  },
+  "APlus": {
+    "seo": { "title": "A+ Studio — EC商品画像セットを生成", "description": "商品画像1枚と少しの訴求点から、統一感のあるEC向けA+画像セットを作成します。" },
+    "eyebrow": "A+ STUDIO",
+    "title": "商品ストーリーを",
+    "titleEm": "A+画像",
+    "intro": "商品画像を1枚アップロードし、重要な情報を追加すると、5枚のEC詳細画像を自動で計画します。",
+    "tabs": { "label": "A+ studio views", "create": "セットを作成", "results": "生成結果" },
+    "rail": { "sourceTitle": "商品画像", "autoTitle": "自動ワークフロー", "autoBody": "商品情報、モジュール計画、生成、品質チェックはバックグラウンドで処理されます。", "planTitle": "セット計画", "planTip": "各モジュールは1つの購入疑問に答えます。セット全体ではなく1枚だけ再生成できます。" },
+    "source": { "alt": "商品画像", "empty": "商品画像が未選択です", "ready": "画像を準備しました", "waiting": "商品画像を待っています" },
+    "create": { "title": "商品について教えてください", "subtitle": "有用なA+セットに必要な入力だけです。", "badge": "5モジュール", "footerHint": "既存のOpen PromptsのクレジットとProvider設定を使用します。" },
+    "upload": { "title": "商品画像をアップロード", "description": "鮮明な商品写真を使用してください。各モジュールで商品の一貫性を保ちます。" },
+    "fields": { "productName": "商品名", "productNamePlaceholder": "例：調光可能なデスクライト", "category": "カテゴリー", "categoryPlaceholder": "例：ホームオフィス", "sellingPoints": "訴求ポイント", "sellingPointsPlaceholder": "1行に1つ — 素材、構造、用途、適合…", "sellingPointsHint": "確認済みのポイントを3〜7個追加してください。未確認の主張は使用しません。", "platform": "対象プラットフォーム", "language": "画像の言語" },
+    "options": { "genericCommerce": "一般EC" },
+    "actions": { "changeImage": "画像を変更", "selectImage": "画像を選択", "generating": "生成中…", "generate": "A+セットを生成", "exportAll": "すべてダウンロード", "rerun": "この画像を再生成", "download": "ダウンロード", "back": "入力を編集" },
+    "results": { "generatingTitle": "A+セットを生成中", "generatingBody": "既存のProviderジョブをポーリングしながら各モジュールを生成しています。", "title": "A+セットの準備ができました", "body": "画像を確認し、1枚だけ再生成するか、完成した画像をダウンロードしてください。", "automationHint": "商品一貫性、事実の境界、ビジュアル品質チェックは自動処理されます。", "pendingImage": "生成待ち" },
+    "status": { "planned": "計画済み", "generating": "生成中", "completed": "完了", "failed": "再試行が必要", "partial": "一部完了" },
+    "errors": { "missingFields": "画像、商品名、カテゴリー、1つ以上の訴求ポイントを入力してください。", "invalidImage": "10 MB未満のPNG、JPEG、またはWebP画像を使用してください。", "moduleFailed": "このモジュールを生成できませんでした。", "noImages": "ダウンロードできる画像がありません。" },
+    "notices": { "imageReady": "商品画像を選択しました。", "completed": "A+セットが完了しました。", "partial": "一部のモジュールに注意が必要です。個別に再生成できます。", "moduleUpdated": "モジュールを更新しました。", "moduleFailed": "モジュールの生成に失敗しました。再試行してください。", "exported": "完成した画像のダウンロードを開始しました。" },
+    "modules": {
+      "ad01": { "title": "商品ポジショニング", "role": "ヒーロービジュアルと価値", "question": "これは何の商品で誰向けですか？", "visual": "商品全体を主役として見せ、控えめなブランド文脈を加えます。" },
+      "ad02": { "title": "課題から解決へ", "role": "購入者の課題と解決策", "question": "どんな問題を解決しますか？", "visual": "信頼できる使用状況と、商品がどう改善するかを見せます。" },
+      "ad03": { "title": "主要機能の証明", "role": "主張、証拠、仕組み", "question": "なぜ主な価値を信じられますか？", "visual": "商品ディテールや仕組みに焦点を当てた構図を使います。" },
+      "ad04": { "title": "素材とディテール", "role": "構造、素材、クローズアップ", "question": "信頼できる品質ですか？", "visual": "確認済みの物理的特徴を見せ、存在しない部品は追加しません。" },
+      "ad05": { "title": "使用シーン", "role": "シーンと対象ユーザー", "question": "生活にどう適合しますか？", "visual": "現実的なスケールと自然な使用状況を示します。" }
     }
   }
 }

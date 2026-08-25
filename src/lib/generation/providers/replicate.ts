@@ -4,6 +4,7 @@ import type {
   GenerationPollResult,
   ImageGenerationProvider,
 } from '~/lib/generation/types';
+import { getGenerationImageInputs } from '~/lib/generation/image-input';
 
 type ReplicatePrediction = {
   id: string;
@@ -56,11 +57,21 @@ export function createReplicateProviderWithOptions(opts?: {
   return {
     provider: 'replicate',
     async create(params: GenerationCreateParams): Promise<GenerationCreateResult> {
-      const body: any = {
+      const body: {
+        input: Record<string, unknown>;
+        version?: string;
+        model?: string;
+      } = {
         input: {
           prompt: params.prompt,
         },
       };
+      const imageInputs = getGenerationImageInputs(params);
+      if (imageInputs.length) {
+        const imageField =
+          String(process.env.REPLICATE_IMAGE_INPUT_FIELD || 'image').trim() || 'image';
+        body.input[imageField] = imageInputs.length === 1 ? imageInputs[0] : imageInputs;
+      }
       if (params.negativePrompt) body.input.negative_prompt = params.negativePrompt;
       if (params.aspectRatio) body.input.aspect_ratio = params.aspectRatio;
       if (params.quality) body.input.quality = params.quality;

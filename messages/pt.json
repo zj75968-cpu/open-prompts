@@ -274,5 +274,28 @@
     "h1Text": "SoraWebui - playground",
     "pDescription": "SoraWebui é um projeto de código aberto que simplifica a criação de vídeos, permitindo que os usuários gerem vídeos online com o modelo Sora da OpenAI usando texto, com implantação fácil de site com um clique.",
     "moreWorks": "Mais Trabalhos"
+  },
+  "APlus": {
+    "seo": { "title": "A+ Studio — gerar conjuntos de imagens para ecommerce", "description": "Crie um conjunto A+ consistente a partir de uma imagem do produto e alguns pontos de venda." },
+    "eyebrow": "A+ STUDIO", "title": "Build your product story with", "titleEm": "A+ images", "intro": "Upload one product image, add the facts that matter, and create a clear five-image ecommerce story.",
+    "tabs": { "label": "A+ studio views", "create": "Create set", "results": "Generated set" },
+    "rail": { "sourceTitle": "SOURCE PRODUCT", "autoTitle": "Automatic workflow", "autoBody": "Product facts, module planning, generation, and quality checks run in the background.", "planTitle": "SET PLAN", "planTip": "Each module answers one buyer question. Regenerate one module without rebuilding the set." },
+    "source": { "alt": "Product source", "empty": "No product image selected", "ready": "Source ready", "waiting": "Waiting for image" },
+    "create": { "title": "Tell us about the product", "subtitle": "Only the inputs needed to create a useful A+ set.", "badge": "5 modules", "footerHint": "Generation uses your existing Open Prompts credits and provider settings." },
+    "upload": { "title": "Upload product image", "description": "Use a clear product photo and keep product identity consistent across modules." },
+    "fields": { "productName": "Product name", "productNamePlaceholder": "e.g. Adjustable desk lamp", "category": "Category", "categoryPlaceholder": "e.g. Home office", "sellingPoints": "Selling points", "sellingPointsPlaceholder": "One point per line — material, structure, use case…", "sellingPointsHint": "Add 3–7 confirmed points.", "platform": "Target platform", "language": "Image language" },
+    "options": { "genericCommerce": "General ecommerce" },
+    "actions": { "changeImage": "Change image", "selectImage": "Select image", "generating": "Generating…", "generate": "Generate A+ set", "exportAll": "Download all", "rerun": "Regenerate", "download": "Download", "back": "Edit inputs" },
+    "results": { "generatingTitle": "Generating your A+ set", "generatingBody": "The studio is generating each module through the existing provider jobs.", "title": "Your A+ set is ready", "body": "Review the modules, regenerate one image, or download the completed set.", "automationHint": "Product consistency, factual boundaries, and visual QA are handled by the workflow.", "pendingImage": "Waiting for generation" },
+    "status": { "planned": "Planned", "generating": "Generating", "completed": "Completed", "failed": "Needs retry", "partial": "Partially completed" },
+    "errors": { "missingFields": "Add an image, product name, category, and at least one selling point.", "invalidImage": "Use a PNG, JPEG, or WebP image smaller than 10 MB.", "moduleFailed": "This module could not be generated.", "noImages": "There are no completed images to download." },
+    "notices": { "imageReady": "Product image selected.", "completed": "A+ set completed.", "partial": "Some modules need attention. Regenerate them individually.", "moduleUpdated": "Module updated.", "moduleFailed": "Module generation failed. Try again.", "exported": "Download links opened for completed images." },
+    "modules": {
+      "ad01": { "title": "Product positioning", "role": "Hero visual and product promise", "question": "What is this product and who is it for?", "visual": "Show the complete product as the clear hero." },
+      "ad02": { "title": "Problem to solution", "role": "Buyer pain point and solution", "question": "What problem does it solve?", "visual": "Show a credible use situation and improvement." },
+      "ad03": { "title": "Core feature proof", "role": "Claim, proof, and mechanism", "question": "Why believe the main benefit?", "visual": "Use a detail or mechanism-focused composition." },
+      "ad04": { "title": "Material and details", "role": "Structure, material, and close-up", "question": "Does the product feel trustworthy?", "visual": "Show confirmed physical details without inventing parts." },
+      "ad05": { "title": "Use in context", "role": "Scene and intended user", "question": "How will this fit my life?", "visual": "Show realistic scale and natural interaction." }
+    }
   }
 }

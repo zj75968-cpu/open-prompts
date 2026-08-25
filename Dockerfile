@@ -4,7 +4,7 @@ FROM node:24-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 COPY package.json package-lock.json ./
-RUN npm ci --include=dev \
+RUN npm ci --include=dev --no-audit --no-fund \
     && test -x node_modules/.bin/next
 
 FROM node:24-alpine AS builder

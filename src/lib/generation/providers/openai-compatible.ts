@@ -1,3 +1,9 @@
+import {
+  getGenerationImageInputs,
+  imageFilename,
+  imageInputToBlob,
+  MAX_GENERATION_REFERENCE_IMAGES,
+} from '~/lib/generation/image-input';
 import type {
   GenerationCreateParams,
   GenerationCreateResult,
@@ -23,6 +29,14 @@ function endpointFromBaseUrl(baseUrl: string) {
   if (/\/v1\/images\/generations$/i.test(base)) return base;
   if (/\/v1$/i.test(base)) return `${base}/images/generations`;
   return `${base}/v1/images/generations`;
+}
+
+function editEndpointFromBaseUrl(baseUrl: string) {
+  const base = baseUrl.replace(/\/+$/, '');
+  if (/\/v1\/images\/edits$/i.test(base)) return base;
+  if (/\/v1\/images\/generations$/i.test(base)) return base.replace(/generations$/i, 'edits');
+  if (/\/v1$/i.test(base)) return `${base}/images/edits`;
+  return `${base}/v1/images/edits`;
 }
 
 function imageSize(aspectRatio?: string) {
@@ -109,6 +123,52 @@ function requestPrompt(params: GenerationCreateParams) {
     : params.prompt;
 }
 
+const PROVIDER_REQUEST_TIMEOUT_MS = 180_000;
+
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PROVIDER_REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('OpenAI-compatible image generation timed out.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function createEditResponse(args: {
+  endpoint: string;
+  apiKey: string;
+  model: string;
+  params: GenerationCreateParams;
+  imageInputs: string[];
+}): Promise<Response> {
+  const form = new FormData();
+  form.set('model', args.model);
+  form.set('prompt', requestPrompt(args.params));
+  form.set('n', String(Math.max(1, Math.min(10, Math.floor(args.params.count || 1)))));
+  form.set('size', imageSize(args.params.aspectRatio));
+  form.set('quality', imageQuality(args.params.quality));
+
+  const blobs = await Promise.all(args.imageInputs.map((imageInput) => imageInputToBlob(imageInput)));
+  const imageField = args.imageInputs.length === 1 ? 'image' : 'image[]';
+  blobs.forEach((blob, index) => {
+    form.append(imageField, blob, imageFilename(args.imageInputs[index], index));
+  });
+  return fetchWithTimeout(args.endpoint, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${args.apiKey}` },
+    body: form,
+  });
+}
+
 function requestId() {
   return (
     globalThis.crypto?.randomUUID?.() ||
@@ -125,26 +185,41 @@ export function createOpenAICompatibleProvider(): ImageGenerationProvider {
   if (!apiKey) throw new Error('Missing OPENAI_IMAGE_API_KEY');
 
   const endpoint = endpointFromBaseUrl(baseUrl);
+  const editEndpoint = editEndpointFromBaseUrl(baseUrl);
 
   return {
     provider: 'openai-compatible',
     async create(params: GenerationCreateParams): Promise<GenerationCreateResult> {
       const model = configuredModel || String(params.model || '').trim() || 'gpt-image-2';
       const startedAt = Date.now();
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          prompt: requestPrompt(params),
-          n: Math.max(1, Math.min(4, Math.floor(params.count || 1))),
-          size: imageSize(params.aspectRatio),
-          quality: imageQuality(params.quality),
-        }),
-      });
+      const imageInputs = getGenerationImageInputs(params);
+      if (imageInputs.length > MAX_GENERATION_REFERENCE_IMAGES) {
+        throw new Error(
+          `A maximum of ${MAX_GENERATION_REFERENCE_IMAGES} reference images is supported.`,
+        );
+      }
+      const response = imageInputs.length
+        ? await createEditResponse({
+            endpoint: editEndpoint,
+            apiKey,
+            model,
+            params,
+            imageInputs,
+          })
+        : await fetchWithTimeout(endpoint, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model,
+              prompt: requestPrompt(params),
+              n: Math.max(1, Math.min(4, Math.floor(params.count || 1))),
+              size: imageSize(params.aspectRatio),
+              quality: imageQuality(params.quality),
+            }),
+          });
 
       if (!response.ok) {
         throw new Error(

@@ -297,6 +297,7 @@
       "account": "用户中心",
       "rank": "排行榜",
       "docs": "文档",
+      "aPlus": "A+ 工作室",
       "submitCta": "分享提示词"
     },
     "submitPage": {
@@ -1386,11 +1387,38 @@
         "steps": [
           "复制 `.env.example` → `.env.local`（本地开发）",
           "配置至少一套 Provider：",
-          "- AtlasCloud: `ATLASCLOUD_BASE_URL` + `ATLASCLOUD_API_KEY`",
-          "- Replicate: `REPLICATE_API_TOKEN` + (`REPLICATE_MODEL` 或 `REPLICATE_VERSION`)",
+          "- OpenAI-compatible 图片接口：`OPENAI_IMAGE_BASE_URL` + `OPENAI_IMAGE_API_KEY`",
+          "- AtlasCloud（可选）：`ATLASCLOUD_BASE_URL` + `ATLASCLOUD_API_KEY`",
+          "- Replicate（可选）：`REPLICATE_API_TOKEN` + (`REPLICATE_MODEL` 或 `REPLICATE_VERSION`)",
           "重启 `npm run dev` 后再试"
         ]
       }
+    }
+  },
+  "APlus": {
+    "seo": { "title": "A+ Studio — 生成电商商品套图", "description": "上传一张商品图并补充少量卖点，生成一套统一、有商业目的的 A+ 电商详情图。" },
+    "eyebrow": "A+ 工作室",
+    "title": "用一套",
+    "titleEm": "A+ 套图",
+    "intro": "上传一张商品图，补充关键事实，让工作室自动规划清晰的五张电商详情图。",
+    "tabs": { "label": "A+ 工作室视图", "create": "创建套图", "results": "生成结果" },
+    "rail": { "sourceTitle": "商品源图", "autoTitle": "后台自动处理", "autoBody": "商品事实、模块规划、生成和质量检查都在后台完成，前台只保留必要操作。", "planTitle": "套图计划", "planTip": "每张图回答一个购买问题。你可以单独重做某一张，不必重新生成整套。" },
+    "source": { "alt": "商品源图", "empty": "尚未选择商品图片", "ready": "源图已准备", "waiting": "等待商品图" },
+    "create": { "title": "告诉我们商品信息", "subtitle": "只填写生成有效 A+ 套图需要的内容。", "badge": "5 张模块图", "footerHint": "生成会使用现有 Open Prompts 额度和 Provider 设置。" },
+    "upload": { "title": "上传商品图片", "description": "请使用清晰的商品照片。系统会在每张模块图中保持商品身份一致。" },
+    "fields": { "productName": "商品名称", "productNamePlaceholder": "例如：可调节台灯", "category": "商品类别", "categoryPlaceholder": "例如：家庭办公", "sellingPoints": "商品卖点", "sellingPointsPlaceholder": "每行一个 — 材质、结构、使用场景、适配关系……", "sellingPointsHint": "填写 3–7 个已确认卖点。未经确认的声明不会进入图片任务。", "platform": "目标平台", "language": "图片语言" },
+    "options": { "genericCommerce": "通用电商" },
+    "actions": { "changeImage": "更换图片", "selectImage": "选择图片", "generating": "生成中…", "generate": "生成 A+ 套图", "exportAll": "下载全部", "rerun": "重做本张", "download": "下载", "back": "编辑输入" },
+    "results": { "generatingTitle": "正在生成你的 A+ 套图", "generatingBody": "工作室正在逐张生成模块，并轮询现有 Provider 任务。", "title": "A+ 套图已准备好", "body": "查看下面的模块，单独重做某张，或下载已完成的图片。", "automationHint": "商品一致性、事实边界和视觉质量检查由后台工作流处理。", "pendingImage": "等待生成" },
+    "status": { "planned": "待生成", "generating": "生成中", "completed": "已完成", "failed": "需重试", "partial": "部分完成" },
+    "errors": { "missingFields": "请先添加商品图、商品名称、商品类别和至少一个卖点。", "invalidImage": "请使用小于 10 MB 的 PNG、JPEG 或 WebP 图片。", "moduleFailed": "这张图片生成失败。", "noImages": "没有可下载的已完成图片。" },
+    "notices": { "imageReady": "商品图片已选择。", "completed": "A+ 套图已完成。", "partial": "部分模块需要处理，你可以单独重做。", "moduleUpdated": "本张图片已更新。", "moduleFailed": "本张图片生成失败，请重试。", "exported": "已为已完成图片打开下载链接。" },
+    "modules": {
+      "ad01": { "title": "商品定位", "role": "主视觉与核心价值", "question": "这是什么商品，适合谁？", "visual": "以完整商品为主角，加入克制的品牌场景。" },
+      "ad02": { "title": "痛点到解决方案", "role": "用户问题与解决方式", "question": "它解决什么问题？", "visual": "展示可信的使用情境，以及商品如何改善这一情境。" },
+      "ad03": { "title": "核心卖点证明", "role": "卖点、证据与机制", "question": "为什么相信这个核心价值？", "visual": "用商品细节或机制聚焦的构图作为视觉证明。" },
+      "ad04": { "title": "材质与细节", "role": "结构、材质与局部特写", "question": "商品是否值得信任？", "visual": "让已确认的物理细节易于检查，不添加不存在的组件。" },
+      "ad05": { "title": "真实使用场景", "role": "场景与适用人群", "question": "它如何融入我的生活？", "visual": "展示真实场景、清晰尺度和自然的商品互动。" }
     }
   }
 }

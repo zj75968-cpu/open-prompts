@@ -26,6 +26,7 @@ export type OpenPromptsSiteNavKey =
   | 'gallery'
   | 'categories'
   | 'create'
+  | 'aPlus'
   | 'submit'
   | 'rank'
   | 'docs'
@@ -98,6 +99,7 @@ export function OpenPromptsSiteHeader({
         { key: 'gallery' as const, label: t('nav.gallery'), href: galleryHref(locale) },
         { key: 'categories' as const, label: t('nav.categories'), href: categoriesHref(locale) },
         { key: 'create' as const, label: t('nav.create'), href: locale === 'en' ? '/create' : `/${locale}/create` },
+        { key: 'aPlus' as const, label: t('nav.aPlus'), href: locale === 'en' ? '/a-plus' : `/${locale}/a-plus` },
         { key: 'submit' as const, label: t('nav.submit'), href: locale === 'en' ? '/submit' : `/${locale}/submit` },
         { key: 'rank' as const, label: t('nav.rank'), href: '#' },
         { key: 'docs' as const, label: t('nav.docs'), href: '#' },

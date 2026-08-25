@@ -31,7 +31,7 @@ export function getProviderRegistry(): Record<string, ImageGenerationProvider> {
 }
 
 export function getDefaultProviderName() {
-  return process.env.DEFAULT_IMAGE_PROVIDER || 'atlascloud';
+  return process.env.DEFAULT_IMAGE_PROVIDER || 'openai-compatible';
 }
 
 export function encodeProviderJobId(provider: string, providerJobId: string) {

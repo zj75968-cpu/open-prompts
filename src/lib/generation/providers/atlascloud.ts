@@ -4,6 +4,7 @@ import type {
   GenerationPollResult,
   ImageGenerationProvider,
 } from '~/lib/generation/types';
+import { getGenerationImageInputs } from '~/lib/generation/image-input';
 
 type AtlascloudCreateResponse = {
   id?: string;
@@ -93,6 +94,12 @@ export function createAtlascloudProviderWithOptions(opts?: { baseUrl?: string; a
         params.model && params.model.includes('/') ? params.model : 'openai/gpt-image-2/text-to-image';
       const size = pickAtlasSize(params.aspectRatio);
       const quality = coerceQuality(params.quality);
+      const imageInputs = getGenerationImageInputs(params);
+      const referenceImageField =
+        String(process.env.ATLASCLOUD_REFERENCE_IMAGE_FIELD || 'image_urls').trim() ||
+        'image_urls';
+      const input: Record<string, unknown> = { prompt: params.prompt };
+      if (imageInputs.length) input[referenceImageField] = imageInputs;
 
       const startedAt = Date.now();
       console.info('[op:provider:atlascloud:create:start]', {
@@ -112,7 +119,7 @@ export function createAtlascloudProviderWithOptions(opts?: { baseUrl?: string; a
           // Send both for compatibility.
           model: modelSlug,
           prompt: params.prompt,
-          input: { prompt: params.prompt },
+          input,
           ...(size ? size : {}),
           ...(quality ? { quality } : {}),
         }),

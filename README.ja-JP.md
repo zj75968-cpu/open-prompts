@@ -80,16 +80,18 @@ cp .env.example .env.local
 | `ADMIN_EMAIL` | 管理者メール（複数はカンマ区切り。ログインメールと完全一致すること） |
 | `ADMIN_PASSWORD` | 8 文字以上。起動時 / 管理者ログイン時に DB と同期 |
 
-画像生成（Atlas Cloud またはテストモード）：
+画像生成（既存の OpenAI 互換 Provider、任意の Atlas Cloud / Replicate Provider、またはテストモード）：
 
 | 変数 | 用途 |
 |------|------|
-| `DEFAULT_IMAGE_PROVIDER` | `atlascloud`（Replicate は未対応） |
-| `ATLASCLOUD_API_KEY` | [Atlas Cloud](https://www.atlascloud.ai) API キー |
+| `DEFAULT_IMAGE_PROVIDER` | デフォルトは `openai-compatible`。`atlascloud` と `replicate` は任意の代替 Provider |
+| `OPENAI_IMAGE_BASE_URL` / `OPENAI_IMAGE_API_KEY` | サーバー側の OpenAI 互換画像 API 設定 |
+| `OPENAI_IMAGE_MODEL` | 画像モデル名。例：`gpt-image-2` |
+| `ATLASCLOUD_BASE_URL` / `ATLASCLOUD_API_KEY` | 任意の [Atlas Cloud](https://www.atlascloud.ai) Provider 設定 |
 | `USE_TEST_MODE` | `true` で実 API をスキップ |
 | `TEST_IMAGE_URL` | テストモードで返す画像 URL |
 
-クレジット上限と任意の OpenAI 設定は [`.env.example`](.env.example) を参照してください。
+クレジット上限と完全な Provider 設定は [`.env.example`](.env.example) を参照してください。
 
 ### 3. データベース
 
@@ -133,11 +135,12 @@ npm run dev
 
 | プロバイダー | 状態 | 設定 |
 |--------------|------|------|
-| **Atlas Cloud** | 対応済み | `ATLASCLOUD_API_KEY`、`ATLASCLOUD_BASE_URL` |
-| **Replicate** | 予定（未対応） | `.env.example` に将来用の変数あり。現時点では `DEFAULT_IMAGE_PROVIDER=replicate` にしないでください |
+| **OpenAI-compatible** | 対応済み・デフォルト | `OPENAI_IMAGE_BASE_URL`、`OPENAI_IMAGE_API_KEY`、`OPENAI_IMAGE_MODEL` |
+| **Atlas Cloud** | 任意 | `ATLASCLOUD_API_KEY`、`ATLASCLOUD_BASE_URL` |
+| **Replicate** | 任意 | `REPLICATE_API_TOKEN`、`REPLICATE_MODEL` または `REPLICATE_VERSION` |
 | **テストモード** | 開発 / デモ | `USE_TEST_MODE=true`、`TEST_IMAGE_URL` |
 
-Create ページでは、ブラウザ（`localStorage`）で API キーを上書きできます。本番ではサーバー側の環境変数を推奨します。
+A+ Studio は既存の OpenAI 互換 Provider と参照画像編集を再利用します。Atlas Cloud は必須ではありません。Create ページでは BYOK 対応 Provider の API キーをブラウザ（`localStorage`）で上書きできますが、本番ではサーバー側の環境変数を推奨します。
 
 ---
 

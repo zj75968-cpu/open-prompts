@@ -86,18 +86,18 @@ cp .env.example .env.local
 | `ADMIN_PASSWORD`                            | 至少 8 位；在启动或管理员登录时同步到数据库     |
 
 
-图像生成（Atlas Cloud 或测试模式）：
+图像生成（复用已配置的 OpenAI-compatible Provider，可选 Atlas Cloud / Replicate Provider，或测试模式）：
 
-
-| 变量                       | 用途                                               |
+| 变量 | 用途 |
 | ------------------------ | ------------------------------------------------ |
-| `DEFAULT_IMAGE_PROVIDER` | `atlascloud`（Replicate 尚未支持）                     |
-| `ATLASCLOUD_API_KEY`     | [Atlas Cloud](https://www.atlascloud.ai) API Key |
-| `USE_TEST_MODE`          | 设为 `true` 可跳过真实 API 调用                           |
-| `TEST_IMAGE_URL`         | 测试模式下返回的图片 URL                                   |
+| `DEFAULT_IMAGE_PROVIDER` | 默认使用 `openai-compatible`；`atlascloud` 与 `replicate` 是可选替代 Provider |
+| `OPENAI_IMAGE_BASE_URL` / `OPENAI_IMAGE_API_KEY` | 服务端 OpenAI-compatible 图片接口配置 |
+| `OPENAI_IMAGE_MODEL` | 图片模型名称，例如 `gpt-image-2` |
+| `ATLASCLOUD_BASE_URL` / `ATLASCLOUD_API_KEY` | 可选的 [Atlas Cloud](https://www.atlascloud.ai) Provider 配置 |
+| `USE_TEST_MODE` | 设为 `true` 可跳过真实 API 调用 |
+| `TEST_IMAGE_URL` | 测试模式下返回的图片 URL |
 
-
-积分上限与可选 OpenAI 配置见 `[.env.example](.env.example)`。
+积分上限与完整 Provider 配置见 [`.env.example`](.env.example)。
 
 ### 3. 数据库
 
@@ -171,13 +171,13 @@ npm run start
 
 **图像生成**
 
-
-| 变量                                        | 说明             |
-| ----------------------------------------- | -------------- |
-| `DEFAULT_IMAGE_PROVIDER`                  | `atlascloud`   |
-| `ATLASCLOUD_API_KEY`                      | 真实出图所需（测试模式除外） |
-| 或 `USE_TEST_MODE=true` + `TEST_IMAGE_URL` | 演示环境，无需付费 API  |
-
+| 变量 | 说明 |
+| --- | --- |
+| `DEFAULT_IMAGE_PROVIDER` | 默认使用 `openai-compatible` |
+| `OPENAI_IMAGE_BASE_URL` / `OPENAI_IMAGE_API_KEY` | 已配置的 OpenAI-compatible 图片接口 |
+| `OPENAI_IMAGE_MODEL` | 图片模型名称，例如 `gpt-image-2` |
+| `ATLASCLOUD_*` / `REPLICATE_*` | 可选 Provider；A+ 不依赖它们 |
+| `USE_TEST_MODE=true` + `TEST_IMAGE_URL` | 演示环境，无需调用真实图片 API |
 
 修改环境变量后请重新部署。
 

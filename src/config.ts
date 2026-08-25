@@ -22,6 +22,8 @@ export const languages = [
 
 export const pathnames = {
   '/': '/',
+  '/create': '/create',
+  '/a-plus': '/a-plus',
 } satisfies Pathnames<typeof locales>;
 
 // Use the default: `always`，设置为 as-needed可不显示默认路由

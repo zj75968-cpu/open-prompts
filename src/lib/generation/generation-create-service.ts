@@ -3,6 +3,7 @@ import {
   getGenerationCreditsRejection,
   type GenerationCreditsContext,
 } from '~/lib/generation/generation-credits-policy';
+import { getGenerationImageInputs, MAX_GENERATION_REFERENCE_IMAGES } from '~/lib/generation/image-input';
 import { resolveGenerationProvider } from '~/lib/generation/provider-runtime';
 import {
   encodeProviderJobId,
@@ -92,6 +93,15 @@ export async function createGeneration(
     typeof request.count === 'number' && Number.isFinite(request.count)
       ? Math.max(1, Math.floor(request.count))
       : 1;
+  const normalizedReferenceImages = getGenerationImageInputs(request);
+  if (normalizedReferenceImages.length > MAX_GENERATION_REFERENCE_IMAGES) {
+    return {
+      status: 400,
+      body: {
+        error: `A maximum of ${MAX_GENERATION_REFERENCE_IMAGES} reference images is supported.`,
+      },
+    };
+  }
   const creditsContext = createCreditsContext({
     internal: !usesClientApiKey,
     context,
@@ -134,6 +144,7 @@ export async function createGeneration(
     aspectRatio: request.aspectRatio,
     quality: request.quality,
     count: request.count,
+    referenceImageCount: normalizedReferenceImages.length,
     promptLen: prompt.length,
     promptPreview: preview(prompt),
   });
@@ -154,6 +165,10 @@ export async function createGeneration(
       aspectRatio: request.aspectRatio,
       quality: request.quality,
       count: request.count,
+      referenceImages: Array.isArray(request.referenceImages)
+        ? request.referenceImages
+        : undefined,
+      imageInputs: Array.isArray(request.imageInputs) ? request.imageInputs : undefined,
     });
     console.info('[op:generation:create:done]', {
       requestId,
