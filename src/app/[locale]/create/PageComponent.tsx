@@ -48,17 +48,17 @@ export default function PageComponent({ locale, prompts }: Props) {
   const [swipeViewer, setSwipeViewer] = useState<SwipeViewerState | null>(null);
 
   const {
-    provider,
+      provider,
     setProvider,
-    aspectRatio,
+      aspectRatio,
     setAspectRatio,
     aspectTouched,
     setAspectTouched,
     model,
     setModel,
-    quality,
+      quality,
     setQuality,
-    count,
+      count,
     setCount,
     capabilities,
     modelOptions,
@@ -84,7 +84,7 @@ export default function PageComponent({ locale, prompts }: Props) {
   const {
     uiState,
     providerJobId,
-    images,
+      images,
     error,
     canGenerate,
     resetGeneration,
@@ -150,10 +150,10 @@ export default function PageComponent({ locale, prompts }: Props) {
         provider === 'internal'
           ? undefined
           : getApiKeyOverride(provider) || undefined,
-      model: model || item?.model || 'GPT Image 2',
-      aspectRatio,
-      quality,
-      count,
+          model: model || item?.model || 'GPT Image 2',
+          aspectRatio,
+          quality,
+          count,
     });
   };
 
@@ -185,7 +185,7 @@ export default function PageComponent({ locale, prompts }: Props) {
   }, [error, provider, t]);
 
   const workbench = (
-    <div className="rounded-2xl border border-[var(--border2)] bg-[color-mix(in_oklab,var(--bg)_70%,var(--surface))] shadow-sm">
+              <div className="rounded-2xl border border-[var(--border2)] bg-[color-mix(in_oklab,var(--bg)_70%,var(--surface))] shadow-sm">
       <PromptEditor prompt={promptText} onPromptChange={setPromptText} />
       <ModelSettings
         provider={provider}
@@ -213,33 +213,33 @@ export default function PageComponent({ locale, prompts }: Props) {
         saveApiKeyOverride={saveApiKeyOverride}
         clearApiKeyOverride={clearApiKeyOverride}
       />
-    </div>
+                            </div>
   );
 
   const generationError =
     uiState === 'failed' ? (
-      <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">
-        {t('gen.failedPrefix')}
-        {error || t('gen.tryAgain')}
-        {internalConfigHint ? (
-          <div className="mt-3 rounded-lg border border-[var(--border)] bg-[color-mix(in_oklab,var(--bg)_70%,transparent)] p-3 text-[12px] text-[var(--text2)]">
+                <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400">
+                  {t('gen.failedPrefix')}
+                  {error || t('gen.tryAgain')}
+                  {internalConfigHint ? (
+                    <div className="mt-3 rounded-lg border border-[var(--border)] bg-[color-mix(in_oklab,var(--bg)_70%,transparent)] p-3 text-[12px] text-[var(--text2)]">
             <div className="font-semibold text-[var(--text)]">
               {internalConfigHint.title}
             </div>
-            <div className="mt-1">{internalConfigHint.body}</div>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
+                      <div className="mt-1">{internalConfigHint.body}</div>
+                      <ul className="mt-2 list-disc space-y-1 pl-5">
               {internalConfigHint.steps.map((step) => (
                 <li key={step} className="whitespace-pre-wrap">
                   {step}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
     ) : null;
 
-  return (
+                    return (
     <>
       <style jsx global>{`
         html,
@@ -282,12 +282,12 @@ export default function PageComponent({ locale, prompts }: Props) {
             />
 
             <aside className="relative z-30 hidden min-h-0 flex-col border-l border-[var(--border2)] bg-[color-mix(in_oklab,var(--bg)_70%,var(--surface))] shadow-[inset_1px_0_0_rgba(255,255,255,0.04)] lg:flex">
-              <div className="flex items-center justify-between border-b border-[var(--border)] p-4">
-                <div className="text-[11px] font-medium tracking-[0.08em] text-[var(--text2)]">
-                  {t('createPage.resultHistoryLabel')}
-                </div>
+            <div className="flex items-center justify-between border-b border-[var(--border)] p-4">
+              <div className="text-[11px] font-medium tracking-[0.08em] text-[var(--text2)]">
+                {t('createPage.resultHistoryLabel')}
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
                 <GenerationResult
                   locale={locale}
                   uiState={uiState}
@@ -307,7 +307,7 @@ export default function PageComponent({ locale, prompts }: Props) {
                     openViewer(viewerImages, index, { prefix })
                   }
                 />
-              </div>
+            </div>
             </aside>
           </div>
         </div>

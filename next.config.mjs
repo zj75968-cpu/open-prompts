@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import createNextIntlPlugin from 'next-intl/plugin';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
@@ -7,7 +8,7 @@ const nextConfig = {
     output: 'standalone',
     // Pin the file-tracing root to this project (a stray ~/package-lock.json otherwise
     // makes Next infer the wrong workspace root, which breaks the OpenNext bundle).
-    outputFileTracingRoot: new URL('.', import.meta.url).pathname,
+    outputFileTracingRoot: fileURLToPath(new URL('.', import.meta.url)),
     // Keep the Postgres driver out of the bundler so its socket/TLS handling stays intact
     // on the Cloudflare Workers runtime (bundling it mangles the connection and hangs).
     serverExternalPackages: ['postgres'],

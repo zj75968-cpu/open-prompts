@@ -121,7 +121,7 @@ export default function PageComponent({ locale }: Props) {
       );
 
       try {
-        const result = await generateAPlusModule({ locale, input: nextInput, module });
+        const result = await generateAPlusModule({ locale, input: nextInput, module: modulePlan });
         setModules((current) =>
           updateModule(current, moduleId, {
             status: 'succeeded',
