@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>灵感图镜 PromptLens 结果页</title>
+    <link rel="stylesheet" href="./viewer.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="glass hero">
+        <div class="hero-copy">
+          <p class="eyebrow">灵感图镜 PromptLens</p>
+          <h1>提示词</h1>
+          <div class="prompt-group">
+            <section class="prompt-block">
+              <span class="prompt-label">正向提示词</span>
+              <p id="prompt" class="prompt">载入中...</p>
+            </section>
+            <section class="prompt-block" id="negative-prompt-block" hidden>
+              <span class="prompt-label">负面提示词</span>
+              <p id="negative-prompt" class="prompt negative-prompt"></p>
+            </section>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <button id="copy-prompt" type="button">复制提示词</button>
+          <button id="download-images" type="button">下载图片</button>
+        </div>
+      </section>
+      <section id="gallery" class="gallery"></section>
+    </main>
+
+    <script src="./viewer.js"></script>
+  </body>
+</html>
