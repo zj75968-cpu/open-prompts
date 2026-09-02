@@ -1,7 +1,9 @@
 export const PUBLIC_API_BASE_URL = "https://impro.n8nmydomain.com";
+export const DEFAULT_OPEN_PROMPTS_CREATE_URL = "https://open-prompts.com/zh/create";
 
 export const DEFAULT_SETTINGS = {
   apiBaseUrl: PUBLIC_API_BASE_URL,
+  openPromptsCreateUrl: DEFAULT_OPEN_PROMPTS_CREATE_URL,
   autoAnalyze: true,
   aspectRatio: "1:1",
   imageCount: 1,
@@ -10,6 +12,13 @@ export const DEFAULT_SETTINGS = {
 
 const PUBLIC_SETTING_KEYS = Object.keys(DEFAULT_SETTINGS);
 const LEGACY_PUBLIC_API_BASE_URLS = new Set(["http://localhost:8787"]);
+const LEGACY_OPEN_PROMPTS_CREATE_URLS = new Set([
+  "http://localhost:3000/zh/create",
+  "http://127.0.0.1:3000/zh/create",
+  "http://localhost:3002/zh/create",
+  "http://127.0.0.1:3002/zh/create",
+  "https://www.open-prompts.com/zh/create"
+]);
 const LEGACY_PRIVATE_SETTING_KEYS = [
   "provider",
   "promptProvider",
@@ -53,7 +62,11 @@ export async function getSettings() {
   await removeLegacyPrivateSettings();
 
   const stored = await chrome.storage.local.get(PUBLIC_SETTING_KEYS);
-  return sanitizePublicSettings({ ...DEFAULT_SETTINGS, ...stored });
+  const migrated = getPublicSettingMigrations(stored);
+  if (Object.keys(migrated).length > 0) {
+    await chrome.storage.local.set(migrated);
+  }
+  return sanitizePublicSettings({ ...DEFAULT_SETTINGS, ...stored, ...migrated });
 }
 
 export async function saveSettings(payload = {}) {
@@ -66,6 +79,7 @@ export async function saveSettings(payload = {}) {
 function sanitizePublicSettings(settings) {
   return {
     apiBaseUrl: normalizeApiBaseUrl(settings.apiBaseUrl),
+    openPromptsCreateUrl: normalizeOpenPromptsCreateUrl(settings.openPromptsCreateUrl),
     autoAnalyze: Boolean(settings.autoAnalyze),
     aspectRatio: normalizeAspectRatio(settings.aspectRatio),
     imageCount: clampImageCount(settings.imageCount),
@@ -82,16 +96,42 @@ function pickPublicSettings(payload) {
 }
 
 function getPublicSettingMigrations(existing) {
+  const updates = {};
   const apiBaseUrl = String(existing.apiBaseUrl || "").trim().replace(/\/+$/g, "");
   if (LEGACY_PUBLIC_API_BASE_URLS.has(apiBaseUrl)) {
-    return { apiBaseUrl: PUBLIC_API_BASE_URL };
+    updates.apiBaseUrl = PUBLIC_API_BASE_URL;
   }
-  return {};
+
+  const openPromptsCreateUrl = String(existing.openPromptsCreateUrl || "").trim().replace(/\/+$/g, "");
+  if (LEGACY_OPEN_PROMPTS_CREATE_URLS.has(openPromptsCreateUrl)) {
+    updates.openPromptsCreateUrl = DEFAULT_OPEN_PROMPTS_CREATE_URL;
+  }
+
+  return updates;
 }
 
 function normalizeApiBaseUrl(value) {
   const normalized = String(value || "").trim().replace(/\/+$/g, "");
   return normalized || PUBLIC_API_BASE_URL;
+}
+
+function normalizeOpenPromptsCreateUrl(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return DEFAULT_OPEN_PROMPTS_CREATE_URL;
+
+  let url;
+  try {
+    url = new URL(normalized);
+  } catch (_error) {
+    throw new Error("Open Prompts 地址必须是有效的 http/https URL。");
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Open Prompts 地址只支持 http/https。");
+  }
+
+  url.hash = "";
+  return url.toString();
 }
 
 function normalizeAspectRatio(value) {

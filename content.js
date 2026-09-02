@@ -2,6 +2,11 @@ const imageCache = new Map();
 const RATIO_OPTIONS = ["1:1", "3:4", "4:3", "9:16", "16:9"];
 const ANALYSIS_IMAGE_MAX_EDGE = 1280;
 const ANALYSIS_IMAGE_JPEG_QUALITY = 0.82;
+const OPEN_PROMPTS_DRAFT_PARAM = "promptlensDraft";
+const OPEN_PROMPTS_MESSAGE_SOURCE = "promptlens-extension";
+const OPEN_PROMPTS_PAGE_SOURCE = "open-prompts";
+const OPEN_PROMPTS_BRIDGE_ATTEMPTS = 30;
+const OPEN_PROMPTS_BRIDGE_INTERVAL_MS = 300;
 
 const state = {
   settings: null,
@@ -12,7 +17,8 @@ const state = {
   panelData: createEmptyPanelData(),
   actionState: {
     analyze: false,
-    generate: false
+    generate: false,
+    openPrompts: false
   }
 };
 
@@ -72,6 +78,7 @@ panel.innerHTML = `
       <div class="pg-actions pg-actions-fixed">
         <button class="pg-action pg-fixed-control" id="pg-copy" type="button">复制提示词</button>
         <button class="pg-action pg-fixed-control" id="pg-analyze" type="button">重新识别</button>
+        <button class="pg-action pg-open-prompts" id="pg-open-prompts" type="button">去 Open Prompts 生图</button>
       </div>
     </section>
 
@@ -111,6 +118,7 @@ const els = {
   charCount: panel.querySelector("#pg-char-count"),
   analyze: panel.querySelector("#pg-analyze"),
   copy: panel.querySelector("#pg-copy"),
+  openPrompts: panel.querySelector("#pg-open-prompts"),
   generate: panel.querySelector("#pg-generate"),
   close: panel.querySelector("#pg-close"),
   detailShort: panel.querySelector("#pg-detail-short"),
@@ -129,6 +137,7 @@ init();
 
 async function init() {
   bindEvents();
+  initOpenPromptsDraftBridge();
   state.panelData.detail = "full";
 
   try {
@@ -230,6 +239,7 @@ function bindEvents() {
     setStatus("提示词已复制。", "success");
   });
 
+  els.openPrompts.addEventListener("click", () => openCurrentPromptInOpenPrompts());
   els.generate.addEventListener("click", () => generateFromCurrentPrompt());
   els.inlineGrid.addEventListener("click", handleInlinePreviewClick);
 }
@@ -239,6 +249,112 @@ function renderRatioSelect() {
     const selected = ratio === state.panelData.aspectRatio ? " selected" : "";
     return `<option value="${ratio}"${selected}>${ratio}</option>`;
   }).join("");
+}
+
+function initOpenPromptsDraftBridge() {
+  const draftId = new URLSearchParams(location.search).get(OPEN_PROMPTS_DRAFT_PARAM)?.trim() || "";
+  if (!/^[a-zA-Z0-9-]{12,80}$/.test(draftId)) return;
+
+  let draft = null;
+  let attempts = 0;
+  let acknowledged = false;
+  let intervalId = null;
+
+  const publishDraft = () => {
+    if (!draft || acknowledged) return;
+    attempts += 1;
+    window.postMessage(
+      {
+        source: OPEN_PROMPTS_MESSAGE_SOURCE,
+        type: "promptlens-draft",
+        draftId,
+        draft
+      },
+      location.origin
+    );
+  };
+
+  const cleanup = () => {
+    if (intervalId !== null) window.clearInterval(intervalId);
+    window.removeEventListener("message", handlePageMessage);
+  };
+
+  const removeDraftParam = () => {
+    const url = new URL(location.href);
+    url.searchParams.delete(OPEN_PROMPTS_DRAFT_PARAM);
+    history.replaceState(history.state, "", url.toString());
+  };
+
+  const handlePageMessage = async (event) => {
+    if (event.source !== window || event.origin !== location.origin) return;
+    const message = event.data;
+    if (!message || message.source !== OPEN_PROMPTS_PAGE_SOURCE || message.draftId !== draftId) return;
+
+    if (message.type === "promptlens-ready") {
+      publishDraft();
+      return;
+    }
+
+    if (message.type !== "promptlens-draft-accepted" || acknowledged) return;
+    acknowledged = true;
+
+    try {
+      await sendMessage({
+        type: "consume-open-prompts-draft",
+        payload: { draftId }
+      });
+      removeDraftParam();
+    } catch (error) {
+      acknowledged = false;
+      console.warn("[PromptLens] Failed to consume Open Prompts draft.", error);
+      return;
+    }
+
+    cleanup();
+  };
+
+  window.addEventListener("message", handlePageMessage);
+
+  sendMessage({ type: "get-open-prompts-draft", payload: { draftId } })
+    .then((result) => {
+      draft = result?.draft || null;
+      if (!draft) throw new Error("PromptLens 草稿为空。");
+
+      publishDraft();
+      intervalId = window.setInterval(() => {
+        if (acknowledged || attempts >= OPEN_PROMPTS_BRIDGE_ATTEMPTS) {
+          cleanup();
+          return;
+        }
+        publishDraft();
+      }, OPEN_PROMPTS_BRIDGE_INTERVAL_MS);
+    })
+    .catch((error) => {
+      cleanup();
+      console.warn("[PromptLens] Unable to deliver Open Prompts draft.", error);
+    });
+}
+
+async function openCurrentPromptInOpenPrompts() {
+  const prompt = getCurrentPrompt().trim();
+  if (!prompt) {
+    setStatus("请先识别或输入提示词。", "error");
+    return;
+  }
+
+  await runAction("openPrompts", "正在打开 Open Prompts...", async () => {
+    const sourceImageUrl = state.panelImage?.currentSrc || state.panelImage?.src || "";
+    await sendMessage({
+      type: "open-open-prompts",
+      payload: {
+        prompt,
+        negativePrompt: getCurrentNegativePrompt(),
+        sourceImageUrl,
+        sourcePageUrl: location.href
+      }
+    });
+    setStatus("已打开 Open Prompts，请确认参数后手动生成。", "success");
+  });
 }
 
 function handleInlinePreviewClick(event) {
@@ -818,6 +934,7 @@ async function runAction(actionName, statusText, task) {
 function syncActionState() {
   els.analyze.classList.toggle("is-busy", state.actionState.analyze);
   els.generate.classList.toggle("is-busy", state.actionState.generate);
+  els.openPrompts.classList.toggle("is-busy", state.actionState.openPrompts);
 }
 
 function syncGenerationVisibility() {

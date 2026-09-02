@@ -5,6 +5,9 @@ const VIEWER_STORE_NAME = "viewer_payloads";
 const VIEWER_RECORD_ID = "current";
 const ANALYSIS_IMAGE_MAX_EDGE = 1280;
 const ANALYSIS_IMAGE_JPEG_QUALITY = 0.82;
+const PROMPT_DRAFT_KEY_PREFIX = "promptlens-draft:";
+const PROMPT_DRAFT_TTL_MS = 10 * 60 * 1000;
+const PROMPT_DRAFT_ID_PATTERN = /^[a-zA-Z0-9-]{12,80}$/;
 
 /**
  * @typedef {Object} GeneratedImage
@@ -31,6 +34,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function handleMessage(message, sender) {
+  if (!isPlainObject(message) || typeof message.type !== "string" || message.type.length > 80) {
+    throw new Error("Invalid extension message.");
+  }
+
   switch (message.type) {
     case "get-settings":
       return getSettings();
@@ -42,6 +49,12 @@ async function handleMessage(message, sender) {
       return generateImage(message.payload || {});
     case "open-viewer":
       return openViewer(message.payload || {});
+    case "open-open-prompts":
+      return openOpenPrompts(message.payload || {});
+    case "get-open-prompts-draft":
+      return getOpenPromptsDraft(message.payload || {}, sender);
+    case "consume-open-prompts-draft":
+      return consumeOpenPromptsDraft(message.payload || {}, sender);
     default:
       throw new Error("Unsupported message type: " + message.type);
   }
@@ -127,6 +140,131 @@ async function openViewer(payload = {}) {
   return { opened: true };
 }
 
+async function openOpenPrompts(payload) {
+  const draft = normalizeOpenPromptsDraft(payload);
+  if (!draft.prompt) throw new Error("请先识别或输入提示词。");
+
+  const settings = await getSettings();
+  const targetUrl = new URL(settings.openPromptsCreateUrl);
+  targetUrl.search = "";
+  const draftId = crypto.randomUUID();
+  const storageKey = getPromptDraftStorageKey(draftId);
+  const record = {
+    draft,
+    createdAt: Date.now(),
+    target: {
+      origin: targetUrl.origin,
+      pathname: targetUrl.pathname
+    }
+  };
+
+  targetUrl.searchParams.set("promptlensDraft", draftId);
+  await chrome.storage.session.set({ [storageKey]: record });
+
+  try {
+    const tab = await chrome.tabs.create({ url: targetUrl.toString() });
+    return { opened: true, draftId, tabId: tab.id ?? null };
+  } catch (error) {
+    await chrome.storage.session.remove(storageKey);
+    throw error;
+  }
+}
+
+async function getOpenPromptsDraft(payload, sender) {
+  const { draftId, record } = await readAuthorizedOpenPromptsDraft(payload, sender);
+  return { draftId, draft: record.draft };
+}
+
+async function consumeOpenPromptsDraft(payload, sender) {
+  const { draftId, storageKey } = await readAuthorizedOpenPromptsDraft(payload, sender);
+  await chrome.storage.session.remove(storageKey);
+  return { consumed: true, draftId };
+}
+
+async function readAuthorizedOpenPromptsDraft(payload, sender) {
+  const draftId = String(payload.draftId || "").trim();
+  if (!PROMPT_DRAFT_ID_PATTERN.test(draftId)) throw new Error("无效的 PromptLens 草稿编号。");
+
+  const senderUrl = sender?.url || sender?.tab?.url || "";
+  let pageUrl;
+  try {
+    pageUrl = new URL(senderUrl);
+  } catch (_error) {
+    throw new Error("无法验证 Open Prompts 页面地址。");
+  }
+
+  const senderOrigin = String(sender?.origin || "").trim();
+  if (!senderOrigin || senderOrigin !== pageUrl.origin) {
+    throw new Error("无法验证 Open Prompts 页面来源。");
+  }
+
+  const storageKey = getPromptDraftStorageKey(draftId);
+  const stored = await chrome.storage.session.get(storageKey);
+  const record = stored[storageKey];
+  if (!record || typeof record !== "object") throw new Error("PromptLens 草稿不存在或已使用。");
+
+  const expired = Date.now() - Number(record.createdAt || 0) > PROMPT_DRAFT_TTL_MS;
+  if (expired) {
+    await chrome.storage.session.remove(storageKey);
+    throw new Error("PromptLens 草稿已过期，请重新识图。");
+  }
+
+  if (!isAuthorizedOpenPromptsPage(pageUrl, record.target)) {
+    throw new Error("当前页面无权读取该 PromptLens 草稿。");
+  }
+
+  return { draftId, storageKey, record };
+}
+
+function isAuthorizedOpenPromptsPage(pageUrl, target) {
+  const expectedOrigin = String(target?.origin || "");
+  const expectedPath = normalizePagePath(target?.pathname);
+  const actualPath = normalizePagePath(pageUrl.pathname);
+  if (actualPath !== expectedPath) return false;
+  if (pageUrl.origin === expectedOrigin) return true;
+
+  // open-prompts.com permanently redirects to www.open-prompts.com. Treat only
+  // these two exact HTTPS origins as aliases; custom targets remain strict.
+  const openPromptsOrigins = new Set([
+    "https://open-prompts.com",
+    "https://www.open-prompts.com"
+  ]);
+  return openPromptsOrigins.has(expectedOrigin) && openPromptsOrigins.has(pageUrl.origin);
+}
+
+function normalizePagePath(pathname) {
+  const normalized = String(pathname || "/").replace(/\/+$/g, "");
+  return normalized || "/";
+}
+
+function getPromptDraftStorageKey(draftId) {
+  return `${PROMPT_DRAFT_KEY_PREFIX}${draftId}`;
+}
+
+function normalizeOpenPromptsDraft(payload) {
+  return {
+    prompt: normalizeDraftText(payload.prompt, 12000),
+    negativePrompt: normalizeDraftText(payload.negativePrompt, 6000),
+    sourceImageUrl: normalizeHttpUrl(payload.sourceImageUrl, 4000),
+    sourcePageUrl: normalizeHttpUrl(payload.sourcePageUrl, 4000)
+  };
+}
+
+function normalizeDraftText(value, maxLength) {
+  return String(value || "").trim().slice(0, maxLength);
+}
+
+function normalizeHttpUrl(value, maxLength) {
+  const text = String(value || "").trim().slice(0, maxLength);
+  if (!text) return "";
+  try {
+    const url = new URL(text);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : "";
+  } catch (_error) {
+    return "";
+  }
+}
+
 async function callBackend(settings, path, payload) {
   const endpoint = buildBackendUrl(settings.apiBaseUrl, path);
   const response = await fetch(endpoint, {
@@ -199,6 +337,7 @@ async function resolveInlineImage({ imageUrl, imageDataUrl, pageUrl, screenshotC
 }
 
 async function fetchImageAsInlineData({ imageUrl, pageUrl }) {
+  /** @type {RequestInit} */
   const fetchOptions = {
     credentials: "include"
   };
@@ -220,11 +359,16 @@ function normalizeAnalyzeResult(result, sourceImageUrl) {
   const structuredPrompt = isPlainObject(result.structuredPrompt) ? result.structuredPrompt : {};
   const drafts = isPlainObject(result.drafts) ? result.drafts : {};
   const displayPrompts = isPlainObject(result.displayPrompts) ? result.displayPrompts : {};
-  const fallbackPrompt = String(result.prompt || "").trim();
+  const negativePrompts = isPlainObject(result.negativePrompt) ? result.negativePrompt : {};
+  const fallbackPrompt = typeof result.prompt === "string" ? result.prompt.trim() : "";
+  const fallbackNegativePrompt =
+    typeof result.negativePrompt === "string" ? result.negativePrompt : "";
   const negativePromptZh = normalizeNegativePromptText(
-    result.negativePromptZh || result.negativePrompt?.zh || result.negativePrompt || ""
+    firstText(result.negativePromptZh, negativePrompts.zh, fallbackNegativePrompt)
   );
-  const negativePromptEn = normalizeNegativePromptText(result.negativePromptEn || result.negativePrompt?.en || "");
+  const negativePromptEn = normalizeNegativePromptText(
+    firstText(result.negativePromptEn, negativePrompts.en)
+  );
 
   return {
     title: String(result.title || "图片提示词").trim() || "图片提示词",

@@ -343,6 +343,15 @@
   text-align: center;
 }
 
+.pg-open-prompts {
+  flex: 1 1 100%;
+  min-width: 220px;
+  background:
+    linear-gradient(180deg, rgba(99, 102, 241, 0.9), rgba(14, 165, 233, 0.78)),
+    rgba(79, 70, 229, 0.28);
+  color: white;
+}
+
 .pg-action.is-busy,
 .pg-chip.is-busy {
   position: relative;
