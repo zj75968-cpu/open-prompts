@@ -1,0 +1,12 @@
+{
+  "promptProvider": "openai-compatible",
+  "promptBaseUrl": "https://api.openai.com/v1",
+  "promptModel": "gpt-5.5",
+  "promptApiKey": "",
+  "imageProvider": "openai-compatible",
+  "imageBaseUrl": "https://api.openai.com/v1",
+  "imageModel": "gpt-image-2",
+  "imageApiKey": "",
+  "imageGenerationEnabled": true,
+  "maxImageCount": 4
+}

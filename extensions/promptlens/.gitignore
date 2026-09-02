@@ -1,0 +1,14 @@
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+node_modules/
+dist/
+build/
+*.zip
+release/
+server/data/settings.json
