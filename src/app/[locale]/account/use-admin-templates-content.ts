@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AdminTemplateRecord } from '~/lib/prompts/template-types';
+import type { AdminTemplateSummary } from '~/lib/prompts/template-types';
 import type { AdminUserTrendRange, DailyCountPoint } from '~/lib/users/admin-user-trend';
 import {
   bulkReviewAdminTemplatesAction,
@@ -13,7 +13,7 @@ import {
 import { loadAdminTemplatesBadge, loadAdminTemplatesPage } from './account-api';
 
 export type InitialAdminTemplates = {
-  items: AdminTemplateRecord[];
+  items: AdminTemplateSummary[];
   total: number | null;
   hasMore: boolean;
   pendingCount: number;
@@ -21,7 +21,7 @@ export type InitialAdminTemplates = {
 };
 
 export type AdminTemplatesContentState = {
-  adminItems: AdminTemplateRecord[];
+  adminItems: AdminTemplateSummary[];
   adminPendingCount: number | null;
   adminPromptsDailyTrend: DailyCountPoint[];
   adminTotal: number | null;
@@ -63,7 +63,7 @@ export function useAdminTemplatesContent(args: {
   const itemsCountRef = useRef(args.initial?.items.length ?? 0);
   const prefetchedRef = useRef(Boolean(args.initial?.items.length));
 
-  const [adminItems, setAdminItems] = useState<AdminTemplateRecord[]>(args.initial?.items ?? []);
+  const [adminItems, setAdminItems] = useState<AdminTemplateSummary[]>(args.initial?.items ?? []);
   const [adminPendingCount, setAdminPendingCount] = useState<number | null>(
     args.initial?.pendingCount ?? null,
   );

@@ -68,8 +68,7 @@ export function TemplatesPanel({
     });
   };
 
-  const toggleSelectAll = (items: TemplateRecord[]) => {
-    const pageIds = items.map((item) => item.id);
+  const toggleSelectAll = (pageIds: number[]) => {
     const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -170,7 +169,9 @@ export function TemplatesPanel({
             ? t('table.emptyFiltered')
             : `${t('table.empty')} ${t('table.emptyAdminHint')}`
         }
-        onOpenDetail={(item) => detail.openDetail(item, false)}
+        onOpenDetail={(item) => {
+          if ('images' in item) detail.openDetail(item, false);
+        }}
         onEdit={openEdit}
         onDelete={(id) => void content.removeTemplate(id)}
       />

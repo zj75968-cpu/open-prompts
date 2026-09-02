@@ -1,15 +1,22 @@
 'use client';
 
-import type { AdminTemplateRecord, TemplateRecord } from '~/lib/prompts/template-types';
+import type {
+  AdminTemplateSummary,
+  TemplateRecord,
+} from '~/lib/prompts/template-types';
 import type { AccountTranslateFn } from './account-actions';
 import { displayStatus, formatReviewDate } from './account-utils';
 
-type TemplateItem = TemplateRecord | AdminTemplateRecord;
+type TemplateItem = TemplateRecord | AdminTemplateSummary;
+
+function templateThumbnail(item: TemplateItem): string | undefined {
+  return 'thumbnailUrl' in item ? item.thumbnailUrl ?? undefined : item.images[0];
+}
 
 type TableSelection = {
   selected: Set<number>;
   onToggle: (id: number) => void;
-  onToggleAll: (items: TemplateItem[]) => void;
+  onToggleAll: (ids: number[]) => void;
 };
 
 export function AccountTemplateTable({
@@ -113,7 +120,7 @@ export function AccountTemplateTable({
                     if (element) element.indeterminate = somePageSelected && !allPageSelected;
                   }}
                   aria-label={t('admin.selectAll')}
-                  onChange={() => selection!.onToggleAll(items)}
+                  onChange={() => selection!.onToggleAll(pageIds)}
                 />
               </th>
               <th>{t('table.template')}</th>
@@ -125,7 +132,7 @@ export function AccountTemplateTable({
           <tbody>
             {items.map((item) => {
               const status = displayStatus(item);
-              const thumbnail = item.images[0];
+              const thumbnail = templateThumbnail(item);
               const ownerLabel =
                 'submitterEmail' in item
                   ? item.submitterEmail ?? t('table.ownerAnonymous')
@@ -209,7 +216,7 @@ export function AccountTemplateTable({
                     if (element) element.indeterminate = somePageSelected && !allPageSelected;
                   }}
                   aria-label={t('admin.selectAll')}
-                  onChange={() => selection.onToggleAll(items)}
+                  onChange={() => selection.onToggleAll(pageIds)}
                 />
               </th>
             ) : null}
@@ -224,7 +231,7 @@ export function AccountTemplateTable({
         <tbody>
           {items.map((item) => {
             const status = displayStatus(item);
-            const thumbnail = item.images[0];
+            const thumbnail = templateThumbnail(item);
             const ownerLabel =
               admin && 'submitterEmail' in item
                 ? item.submitterEmail ?? t('table.ownerAnonymous')

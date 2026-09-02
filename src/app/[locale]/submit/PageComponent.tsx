@@ -166,8 +166,8 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
             <SubmitLanding publicHref={submitPublicPath} privateHref={submitPrivatePath} />
           </div>
         ) : (
-          <div className="op-submit-shell relative">
-            <div className="mx-auto w-full max-w-7xl px-6">
+        <div className="op-submit-shell relative">
+          <div className="mx-auto w-full max-w-7xl px-6">
               <div className={`op-sp-page${form.success ? ' op-sp-page--simple' : ''}`}>
                 <div className={`op-sp-form-area${form.success ? ' op-sp-form-area--simple' : ''}`}>
                   {form.success ? (
@@ -182,65 +182,65 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
                       onReset={resetForm}
                     />
                   ) : (
-                    <>
-                      <header className="mb-8">
-                        {!isEditMode ? (
+                  <>
+                    <header className="mb-8">
+                      {!isEditMode ? (
                           <Link
                             href={submitChooserPath}
                             className="mb-4 inline-block text-xs text-[var(--text3)] hover:text-[var(--amber)]"
                           >
-                            {t('chooser.back')}
-                          </Link>
-                        ) : null}
-                        <div className="op-sp-wizard-eyebrow">
-                          {isEditMode
-                            ? t('editMode.eyebrow')
-                            : isPrivateMode
-                              ? t('privateMode.eyebrow')
-                              : t('wizard.eyebrow')}
-                        </div>
-                        <h1 className="op-sp-wizard-title">
-                          {isEditMode ? (
-                            <>
-                              {t('editMode.title')}
-                              <em>{t('editMode.titleEm')}</em>
-                            </>
-                          ) : isPrivateMode ? (
-                            <>
-                              {t('privateMode.title')}
-                              <em>{t('privateMode.titleEm')}</em>
-                            </>
-                          ) : (
-                            <>
-                              {t('wizard.title')}
-                              <em>{t('wizard.titleEm')}</em>
-                            </>
-                          )}
-                        </h1>
-                        <p className="op-sp-wizard-sub">
-                          {isEditMode
-                            ? t('editMode.subtitle')
-                            : isPrivateMode
-                              ? t('privateMode.subtitle')
-                              : t('wizard.subtitleSimple')}
-                        </p>
-                      </header>
+                          {t('chooser.back')}
+                        </Link>
+                      ) : null}
+                      <div className="op-sp-wizard-eyebrow">
+                        {isEditMode
+                          ? t('editMode.eyebrow')
+                          : isPrivateMode
+                            ? t('privateMode.eyebrow')
+                            : t('wizard.eyebrow')}
+                      </div>
+                      <h1 className="op-sp-wizard-title">
+                        {isEditMode ? (
+                          <>
+                            {t('editMode.title')}
+                            <em>{t('editMode.titleEm')}</em>
+                          </>
+                        ) : isPrivateMode ? (
+                          <>
+                            {t('privateMode.title')}
+                            <em>{t('privateMode.titleEm')}</em>
+                          </>
+                        ) : (
+                          <>
+                            {t('wizard.title')}
+                            <em>{t('wizard.titleEm')}</em>
+                          </>
+                        )}
+                      </h1>
+                      <p className="op-sp-wizard-sub">
+                        {isEditMode
+                          ? t('editMode.subtitle')
+                          : isPrivateMode
+                            ? t('privateMode.subtitle')
+                            : t('wizard.subtitleSimple')}
+                      </p>
+                    </header>
 
-                      {isEditMode && loadError ? (
-                        <div className="op-sp-info mb-6 border-[var(--coral)]/40">
-                          <p className="text-[var(--coral)]">{loadError}</p>
+                    {isEditMode && loadError ? (
+                      <div className="op-sp-info mb-6 border-[var(--coral)]/40">
+                        <p className="text-[var(--coral)]">{loadError}</p>
                           <Link
                             href={accountPanelHref(locale, 'prompts')}
                             className="mt-2 inline-block text-sm text-[var(--amber)]"
                           >
-                            {t('editMode.backToTemplates')}
-                          </Link>
-                        </div>
-                      ) : null}
+                          {t('editMode.backToTemplates')}
+                        </Link>
+                      </div>
+                    ) : null}
 
-                      {isEditMode && loadingTemplate ? (
-                        <p className="mb-6 text-sm text-[var(--text2)]">{t('editMode.loading')}</p>
-                      ) : null}
+                    {isEditMode && loadingTemplate ? (
+                      <p className="mb-6 text-sm text-[var(--text2)]">{t('editMode.loading')}</p>
+                    ) : null}
 
                       {!editorUnavailable ? (
                         <>
@@ -291,9 +291,9 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
                           />
                         </>
                       ) : null}
-                    </>
-                  )}
-                </div>
+                      </>
+                    )}
+                    </div>
 
                 {!form.success && !editorUnavailable ? (
                   <SubmitLivePreview
@@ -305,10 +305,10 @@ export default function PageComponent({ locale, quickTags }: SubmitPageProps) {
                     tags={form.tags}
                     images={form.previewImageUrls}
                   />
-                ) : null}
-              </div>
+              ) : null}
             </div>
           </div>
+        </div>
         )}
       </main>
       <OpenPromptsSiteFooter locale={locale} />

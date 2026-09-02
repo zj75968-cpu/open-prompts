@@ -1,3 +1,4 @@
+import { imageAssetIdFromReference } from '~/lib/assets/asset-types';
 import { MAX_TITLE } from '~/lib/prompts/template-limits';
 import { modelLabelToId, type TemplateRecord } from '~/lib/prompts/template-types';
 import {
@@ -9,7 +10,7 @@ import { MAX_RESULT_IMAGES, type SubmitFormPayload, type SubmitFormValues, type 
 
 export function isValidImageSrc(value: string): boolean {
   const source = value.trim();
-  return /^https?:\/\//i.test(source) || source.startsWith('data:');
+  return /^https?:\/\//i.test(source) || Boolean(imageAssetIdFromReference(source));
 }
 
 export function templateToSubmitFormValues(item: TemplateRecord): SubmitFormValues {

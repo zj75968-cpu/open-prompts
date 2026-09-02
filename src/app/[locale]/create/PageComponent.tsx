@@ -24,8 +24,28 @@ import { useCreateTemplateSelection } from './use-create-template-selection';
 import { useGenerationHistory } from './use-generation-history';
 import { useGenerationJob } from './use-generation-job';
 import { useGenerationSettings } from './use-generation-settings';
+import { usePromptLensDraft } from './use-promptlens-draft';
 
 type Props = { locale: string; prompts: PromptGalleryItem[] };
+
+type PromptLensSource = {
+  sourceImageUrl: string;
+  sourcePageUrl: string;
+};
+
+function normalizeReferenceImageUrl(value: string): string | undefined {
+  const normalized = String(value || '').trim();
+  if (!normalized) return undefined;
+
+  try {
+    const url = new URL(normalized);
+    return url.protocol === 'http:' || url.protocol === 'https:'
+      ? url.toString()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 type ViewerOptions = {
   title?: string;
@@ -44,7 +64,10 @@ export default function PageComponent({ locale, prompts }: Props) {
     filteredTemplates,
     heroCarouselItems,
   } = useCreateTemplateSelection(prompts);
+  const importedDraft = usePromptLensDraft();
   const [promptText, setPromptText] = useState('');
+  const [negativePromptText, setNegativePromptText] = useState('');
+  const [promptLensSource, setPromptLensSource] = useState<PromptLensSource | null>(null);
   const [swipeViewer, setSwipeViewer] = useState<SwipeViewerState | null>(null);
 
   const {
@@ -102,6 +125,7 @@ export default function PageComponent({ locale, prompts }: Props) {
     images,
     providerJobId,
     prompt: promptText,
+    negativePrompt: negativePromptText,
     model: model || item?.model || 'GPT Image 2',
     provider,
     aspectRatio,
@@ -111,8 +135,34 @@ export default function PageComponent({ locale, prompts }: Props) {
 
   useEffect(() => {
     setPromptText(item?.prompt ?? '');
+    setNegativePromptText('');
+    setPromptLensSource(null);
     resetGeneration();
   }, [selectedId, item?.prompt, resetGeneration]);
+
+  useEffect(() => {
+    if (!importedDraft) return;
+    setPromptText(importedDraft.prompt);
+    setNegativePromptText(importedDraft.negativePrompt);
+    setPromptLensSource(
+      importedDraft.sourceImageUrl || importedDraft.sourcePageUrl
+        ? {
+            sourceImageUrl: importedDraft.sourceImageUrl,
+            sourcePageUrl: importedDraft.sourcePageUrl,
+          }
+        : null,
+    );
+    resetGeneration();
+  }, [importedDraft, resetGeneration]);
+
+  const selectTemplate = (templateId: string) => {
+    const template = prompts.find((candidate) => candidate.id === templateId);
+    setSelectedId(templateId);
+    setPromptText(template?.prompt ?? '');
+    setNegativePromptText('');
+    setPromptLensSource(null);
+    resetGeneration();
+  };
 
   const automaticAspectSource =
     uiState === 'succeeded' && images[0]
@@ -146,6 +196,12 @@ export default function PageComponent({ locale, prompts }: Props) {
     await startGeneration({
       provider,
       prompt: promptText,
+      negativePrompt: negativePromptText,
+      referenceImages: promptLensSource?.sourceImageUrl
+        ? [normalizeReferenceImageUrl(promptLensSource.sourceImageUrl)].filter(
+            (value): value is string => Boolean(value),
+          )
+        : [],
       apiKey:
         provider === 'internal'
           ? undefined
@@ -160,6 +216,8 @@ export default function PageComponent({ locale, prompts }: Props) {
   const restoreHistoryEntry = (entry: GenerationHistoryEntry) => {
     applySettings(entry);
     setPromptText(entry.prompt);
+    setNegativePromptText(entry.negativePrompt);
+    setPromptLensSource(null);
     restoreGeneration(entry);
   };
 
@@ -186,7 +244,18 @@ export default function PageComponent({ locale, prompts }: Props) {
 
   const workbench = (
               <div className="rounded-2xl border border-[var(--border2)] bg-[color-mix(in_oklab,var(--bg)_70%,var(--surface))] shadow-sm">
-      <PromptEditor prompt={promptText} onPromptChange={setPromptText} />
+      <PromptEditor
+        prompt={promptText}
+        negativePrompt={negativePromptText}
+        source={promptLensSource}
+        onPromptChange={setPromptText}
+        onNegativePromptChange={setNegativePromptText}
+        onSourceImageUrlChange={(sourceImageUrl) =>
+          setPromptLensSource((current) =>
+            current ? { ...current, sourceImageUrl } : current,
+          )
+        }
+      />
       <ModelSettings
         provider={provider}
         model={model}
@@ -266,7 +335,7 @@ export default function PageComponent({ locale, prompts }: Props) {
               selectedItem={item}
               templates={filteredTemplates}
               onQueryChange={setQuery}
-              onSelect={setSelectedId}
+              onSelect={selectTemplate}
               onOpenViewer={openViewer}
             />
 
@@ -277,7 +346,7 @@ export default function PageComponent({ locale, prompts }: Props) {
               carouselItems={heroCarouselItems}
               workbench={workbench}
               generationError={generationError}
-              onSelectTemplate={setSelectedId}
+              onSelectTemplate={selectTemplate}
               onOpenViewer={openViewer}
             />
 

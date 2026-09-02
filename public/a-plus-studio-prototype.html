@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Open Prompts A+ Studio 简化版静态交互原型">
+  <title>A+ Studio — Open Prompts</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0e0d0b;
+      --surface: #171613;
+      --surface-2: #201e19;
+      --surface-3: #2a271f;
+      --line: rgba(255,255,255,.11);
+      --line-strong: rgba(255,255,255,.2);
+      --text: #f0ebe0;
+      --text-2: #aaa397;
+      --text-3: #6f695f;
+      --amber: #e8a020;
+      --amber-2: #f0b840;
+      --amber-dim: rgba(232,160,32,.13);
+      --teal: #2dd4a0;
+      --teal-dim: rgba(45,212,160,.11);
+      --coral: #e06050;
+      --coral-dim: rgba(224,96,80,.1);
+      --radius: 10px;
+      --radius-lg: 14px;
+      --font-ui: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-ui); }
+    body { font-size: 13px; letter-spacing: -.005em; }
+    button, input, textarea, select { font: inherit; }
+    button { cursor: pointer; }
+    svg { display: block; }
+    .app { min-height: 100vh; display: flex; flex-direction: column; }
+    .topbar { height: 62px; display: flex; flex: 0 0 62px; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid var(--line); background: #12110f; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-mark { width: 25px; height: 25px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 7px; color: var(--amber-2); background: var(--surface-2); }
+    .brand-name { font-size: 14px; font-weight: 650; }
+    .brand-name span { margin-left: 6px; color: var(--text-3); font-weight: 400; }
+    .topbar-note { color: var(--text-3); font-size: 11px; }
+    .topbar-action { display: inline-flex; align-items: center; gap: 7px; min-height: 31px; padding: 0 11px; border: 1px solid var(--line); border-radius: 7px; color: var(--text-2); background: transparent; font-size: 11px; }
+    .topbar-action:hover { border-color: var(--line-strong); color: var(--text); background: var(--surface-2); }
+    .content { min-height: 0; flex: 1; display: grid; grid-template-columns: 222px minmax(0, 1fr) 240px; }
+    .left-rail, .right-rail { min-width: 0; padding: 22px 15px; background: #141310; }
+    .left-rail { border-right: 1px solid var(--line); }
+    .right-rail { border-left: 1px solid var(--line); }
+    .rail-title { display: flex; align-items: center; justify-content: space-between; margin: 0 7px 10px; color: var(--text-3); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+    .source-card { padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+    .source-image { height: 148px; display: grid; place-items: center; overflow: hidden; border-radius: 7px; background: #e9e6de; }
+    .source-image svg { width: 68%; max-width: 130px; height: auto; }
+    .source-name { display: block; margin-top: 10px; overflow: hidden; color: var(--text-2); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+    .source-hint { display: flex; align-items: center; gap: 5px; margin-top: 5px; color: var(--teal); font-size: 10px; }
+    .dot { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: currentColor; }
+    .edit-image { width: 100%; margin-top: 10px; padding: 7px; border: 1px solid var(--line); border-radius: 6px; color: var(--text-2); background: transparent; font-size: 10px; }
+    .edit-image:hover { border-color: var(--amber); color: var(--amber-2); }
+    .left-divider { height: 1px; margin: 21px 7px; background: var(--line); }
+    .mini-note { padding: 0 7px; color: var(--text-3); font-size: 10px; line-height: 1.6; }
+    .mini-note strong { display: block; margin-bottom: 4px; color: var(--text-2); font-weight: 550; }
+    .main { min-width: 0; padding: 27px 30px 48px; overflow-y: auto; }
+    .main-inner { max-width: 850px; margin: 0 auto; }
+    .eyebrow { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; color: var(--amber); font-size: 10px; letter-spacing: .13em; text-transform: uppercase; }
+    .eyebrow .dot { box-shadow: 0 0 0 3px var(--amber-dim); }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 31px; line-height: 1.15; letter-spacing: -.035em; font-weight: 620; }
+    h1 em { color: var(--amber-2); font-style: italic; }
+    .intro { max-width: 620px; margin-top: 9px; color: var(--text-2); font-size: 13px; line-height: 1.6; }
+    .view-tabs { display: flex; gap: 3px; margin-top: 23px; padding: 3px; width: fit-content; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    .view-tab { min-height: 29px; padding: 0 12px; border: 0; border-radius: 5px; color: var(--text-3); background: transparent; font-size: 11px; }
+    .view-tab:hover { color: var(--text-2); }
+    .view-tab.active { color: var(--text); background: var(--surface-3); }
+    .view { display: none; margin-top: 17px; animation: show .22s ease both; }
+    .view.active { display: block; }
+    @keyframes show { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+    .card { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+    .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; padding: 15px 17px; border-bottom: 1px solid var(--line); }
+    .card-title { font-size: 13px; font-weight: 600; }
+    .card-subtitle { margin-top: 4px; color: var(--text-3); font-size: 10px; line-height: 1.45; }
+    .card-body { padding: 17px; }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+    .field { min-width: 0; }
+    .field.full { grid-column: 1 / -1; }
+    .field label { display: block; margin-bottom: 6px; color: var(--text-2); font-size: 11px; }
+    .field input, .field textarea, .field select { width: 100%; border: 1px solid var(--line-strong); border-radius: 7px; outline: none; padding: 10px 11px; color: var(--text); background: var(--surface-2); font-size: 12px; }
+    .field textarea { min-height: 95px; resize: vertical; line-height: 1.65; }
+    .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--amber); box-shadow: 0 0 0 3px var(--amber-dim); }
+    .upload-row { display: grid; grid-template-columns: 145px 1fr; gap: 13px; margin-bottom: 17px; }
+    .upload-preview { min-height: 145px; display: grid; place-items: center; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: #e9e6de; }
+    .upload-preview svg { width: 65%; max-width: 100px; height: auto; }
+    .upload-copy { min-height: 145px; display: flex; flex-direction: column; justify-content: center; padding: 17px; border: 1px dashed var(--line-strong); border-radius: 8px; }
+    .upload-copy strong { color: var(--text-2); font-size: 12px; font-weight: 550; }
+    .upload-copy p { margin-top: 6px; color: var(--text-3); font-size: 10px; line-height: 1.55; }
+    .upload-copy button { width: fit-content; margin-top: 12px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; color: var(--text-2); background: var(--surface-2); font-size: 10px; }
+    .upload-copy button:hover { border-color: var(--amber); color: var(--amber-2); }
+    .form-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 17px; }
+    .muted { color: var(--text-3); font-size: 10px; line-height: 1.5; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 33px; padding: 0 13px; border: 1px solid var(--line-strong); border-radius: 7px; color: var(--text-2); background: var(--surface-2); font-size: 11px; font-weight: 550; }
+    .btn:hover { border-color: rgba(232,160,32,.45); color: var(--text); }
+    .btn-primary { border-color: var(--amber); color: #171208; background: var(--amber); }
+    .btn-primary:hover { border-color: var(--amber-2); color: #171208; background: var(--amber-2); }
+    .btn-quiet { border-color: transparent; background: transparent; }
+    .tag { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border-radius: 5px; font-size: 10px; }
+    .tag-green { color: var(--teal); background: var(--teal-dim); }
+    .tag-amber { color: var(--amber-2); background: var(--amber-dim); }
+    .simple-plan { display: grid; gap: 8px; }
+    .plan-card { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); cursor: pointer; }
+    .plan-card:hover, .plan-card.selected { border-color: rgba(232,160,32,.45); background: var(--surface-2); }
+    .plan-number { width: 52px; height: 40px; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--amber-2); background: #211c13; font-family: var(--font-mono); font-size: 10px; }
+    .plan-copy { min-width: 0; }
+    .plan-copy strong { display: block; font-size: 12px; font-weight: 600; }
+    .plan-copy span { display: block; margin-top: 4px; overflow: hidden; color: var(--text-2); font-size: 10px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+    .plan-arrow { color: var(--text-3); }
+    .plan-card:hover .plan-arrow, .plan-card.selected .plan-arrow { color: var(--amber); }
+    .plan-tip { display: flex; gap: 8px; align-items: flex-start; margin-top: 13px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--text-3); background: var(--surface); font-size: 10px; line-height: 1.5; }
+    .plan-tip svg { flex: 0 0 auto; margin-top: 1px; color: var(--amber); }
+    .results-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+    .results-head h2 { font-size: 15px; font-weight: 600; }
+    .results-head p { margin-top: 4px; color: var(--text-3); font-size: 10px; }
+    .result-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .result-card { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+    .result-card.selected { border-color: rgba(232,160,32,.48); }
+    .result-art { position: relative; min-height: 190px; display: grid; place-items: center; overflow: hidden; background: #d9d5ca; }
+    .result-art.dark { background: #343027; }
+    .result-art.warm { background: #cbbba4; }
+    .result-art.blue { background: #c7d0d0; }
+    .result-art svg { width: 44%; max-width: 135px; height: auto; }
+    .art-copy { position: absolute; top: 16px; left: 16px; right: 15px; color: #28231c; }
+    .art-copy.light { color: #f7f1e7; }
+    .art-copy small { display: block; margin-bottom: 5px; font-family: var(--font-mono); font-size: 8px; letter-spacing: .1em; opacity: .65; }
+    .art-copy strong { display: block; max-width: 175px; font-size: 15px; line-height: 1.05; font-weight: 650; }
+    .art-copy span { display: block; max-width: 155px; margin-top: 6px; font-size: 9px; line-height: 1.35; opacity: .75; }
+    .result-info { padding: 11px 12px 12px; }
+    .result-top { display: flex; align-items: center; justify-content: space-between; gap: 9px; }
+    .result-kind { color: var(--amber-2); font-size: 10px; }
+    .status { display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; border-radius: 4px; font-size: 9px; }
+    .status.done { color: var(--teal); background: var(--teal-dim); }
+    .status.waiting { color: var(--amber-2); background: var(--amber-dim); }
+    .status.error { color: var(--coral); background: var(--coral-dim); }
+    .result-info h3 { margin-top: 8px; font-size: 12px; font-weight: 600; }
+    .result-info p { margin-top: 4px; color: var(--text-2); font-size: 10px; line-height: 1.45; }
+    .result-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+    .result-bottom small { color: var(--text-3); font-size: 9px; }
+    .mini-btn { padding: 4px 8px; border: 1px solid var(--line); border-radius: 5px; color: var(--text-2); background: transparent; font-size: 9px; }
+    .mini-btn:hover { border-color: var(--line-strong); color: var(--text); }
+    .status-banner { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; padding: 11px 13px; border: 1px solid rgba(45,212,160,.25); border-radius: 8px; background: var(--teal-dim); }
+    .status-banner strong { font-size: 11px; font-weight: 600; }
+    .status-banner span { display: block; margin-top: 3px; color: var(--text-2); font-size: 10px; }
+    .spinner { width: 13px; height: 13px; flex: 0 0 13px; border: 2px solid rgba(240,184,64,.25); border-top-color: var(--amber-2); border-radius: 50%; }
+    .right-rail .rail-section { padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .right-rail .rail-section:last-child { border-bottom: 0; }
+    .right-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 11px; }
+    .right-title strong { color: var(--text-2); font-size: 11px; font-weight: 600; }
+    .right-title span { color: var(--text-3); font-size: 10px; }
+    .right-copy { color: var(--text-2); font-size: 10px; line-height: 1.55; }
+    .right-list { display: grid; gap: 8px; margin-top: 11px; }
+    .right-list div { display: flex; justify-content: space-between; gap: 10px; padding-bottom: 7px; border-bottom: 1px solid rgba(255,255,255,.05); color: var(--text-2); font-size: 10px; }
+    .right-list div:last-child { padding-bottom: 0; border-bottom: 0; }
+    .right-list strong { color: var(--text); font-weight: 500; }
+    .progress-track { height: 5px; overflow: hidden; border-radius: 5px; background: var(--surface-3); }
+    .progress-bar { width: 0; height: 100%; border-radius: inherit; background: var(--amber); transition: width .3s ease; }
+    .progress-label { display: flex; justify-content: space-between; margin-bottom: 7px; color: var(--text-2); font-size: 10px; }
+    .progress-label strong { color: var(--amber-2); font-family: var(--font-mono); font-weight: 500; }
+    .export-box { padding: 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    .export-box p { color: var(--text-2); font-size: 10px; line-height: 1.55; }
+    .export-box .btn { width: 100%; margin-top: 10px; }
+    .toast { position: fixed; right: 20px; bottom: 20px; z-index: 10; display: flex; align-items: center; gap: 8px; max-width: 330px; padding: 10px 12px; border: 1px solid rgba(45,212,160,.35); border-radius: 8px; color: var(--text); background: #1e2a24; box-shadow: 0 10px 30px rgba(0,0,0,.25); opacity: 0; pointer-events: none; transform: translateY(8px); transition: opacity .2s, transform .2s; font-size: 11px; }
+    .toast.show { opacity: 1; transform: none; }
+    @media (max-width: 1080px) { .content { grid-template-columns: 195px minmax(0, 1fr); } .right-rail { display: none; } .main { padding-inline: 22px; } }
+    @media (max-width: 700px) { .topbar { height: auto; min-height: 58px; flex-wrap: wrap; gap: 8px; padding: 11px 14px; } .topbar-note { display: none; } .content { display: block; } .left-rail { display: none; } .main { padding: 20px 13px 35px; } h1 { font-size: 26px; } .upload-row, .field-grid, .result-grid { grid-template-columns: 1fr; } .upload-preview { min-height: 160px; } .upload-copy { min-height: auto; } .form-actions { align-items: stretch; flex-direction: column; } .form-actions .btn { width: 100%; } .results-head { align-items: flex-start; flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand"><div class="brand-mark">✦</div><div class="brand-name">Open Prompts <span>/ A+ Studio</span></div></div>
+      <div class="topbar-note">商品图 → A+ 套图</div>
+      <button class="topbar-action" data-action="reset">重新开始</button>
+    </header>
+
+    <div class="content">
+      <aside class="left-rail">
+        <div class="rail-title"><span>当前商品</span><span>01</span></div>
+        <div class="source-card">
+          <div class="source-image"><svg viewBox="0 0 240 260" aria-label="商品预览"><use href="#product"></use></svg></div>
+          <span class="source-name" id="fileName">desk-lamp-primary.png</span>
+          <span class="source-hint"><i class="dot"></i>商品图已添加</span>
+          <input id="fileInput" type="file" accept="image/png,image/jpeg" hidden>
+          <button class="edit-image" data-action="changeImage">更换商品图</button>
+        </div>
+        <div class="left-divider"></div>
+        <div class="mini-note"><strong>你只需要提供</strong>一张商品图、商品名称，以及 3 条卖点。系统会在后台自动整理事实、规划模块并检查商品一致性。</div>
+      </aside>
+
+      <main class="main">
+        <div class="main-inner">
+          <div class="eyebrow"><span class="dot"></span>Simple commerce image maker</div>
+          <h1>把一张商品图，变成一套 <em>A+ 套图</em></h1>
+          <p class="intro">补充少量商品信息，系统会自动生成一套有顺序、有重点的电商详情图。复杂的事实整理、图片规划和质量检查都在后台完成。</p>
+
+          <div class="view-tabs" role="tablist" aria-label="A+ 工作区"><button class="view-tab active" data-view="create" role="tab">创建套图</button><button class="view-tab" data-view="results" role="tab">查看结果</button></div>
+
+          <section class="view active" data-view-panel="create">
+            <div class="card">
+              <div class="card-head"><div><div class="card-title">告诉我们这是什么商品</div><div class="card-subtitle">只填写影响图片内容的必要信息。</div></div><span class="tag tag-green">简单输入</span></div>
+              <div class="card-body">
+                <div class="upload-row"><div class="upload-preview"><svg viewBox="0 0 240 260" aria-label="已上传商品图"><use href="#product"></use></svg></div><div class="upload-copy"><strong>商品图片已准备好</strong><p>建议使用清晰、无遮挡的白底图。后台会自动识别商品轮廓与可见结构，生成时保持外观一致。</p><button data-action="changeImage">更换图片</button></div></div>
+                <div class="field-grid">
+                  <div class="field"><label for="productName">商品名称 / 类别</label><input id="productName" value="可调光 LED 桌面灯" placeholder="例如：折叠收纳箱"></div>
+                  <div class="field"><label for="platform">目标平台</label><select id="platform"><option>Amazon US</option><option>通用电商</option><option>Amazon UK</option></select></div>
+                  <div class="field"><label for="language">图片语言</label><select id="language"><option>简体中文</option><option>English</option></select></div>
+                  <div class="field"><label for="style">图片风格</label><select id="style"><option>专业 · 极简 · 温暖</option><option>家庭生活方式</option><option>深色科技感</option></select></div>
+                  <div class="field full"><label for="sellingPoints">商品卖点 <span class="muted">（每行一条，建议 3 条）</span></label><textarea id="sellingPoints" placeholder="例如：三档色温与无级调光，适合阅读和工作&#10;加宽底座，桌面放置稳定&#10;灯臂可折叠，收纳更省空间">三档色温与无级调光，适合阅读和工作
+加宽底座配防滑脚垫，桌面放置稳定
+可折叠灯臂，收纳时节省空间</textarea></div>
+                </div>
+                <div class="form-actions"><span class="muted">支持 JPG / PNG · 一套默认生成 5 张</span><button class="btn btn-primary" data-action="generate"><span>生成 A+ 套图</span><span>→</span></button></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="view" data-view-panel="results">
+            <div class="status-banner" id="statusBanner"><span class="spinner" id="spinner"></span><div><strong id="statusTitle">准备生成你的 A+ 套图</strong><span id="statusText">点击“生成 A+ 套图”后，这里会显示简短的处理状态。</span></div></div>
+            <div class="results-head"><div><h2>你的 A+ 套图</h2><p>每张图只负责一个重点，可单独重做。</p></div><button class="btn" data-action="export">导出全部图片</button></div>
+            <div class="result-grid">
+              <article class="result-card" data-result="main"><div class="result-art"><div class="art-copy"><small>主视觉</small><strong>让桌面<br>回到专注</strong><span>可调光 LED 桌面灯 · 专业办公光线</span></div><svg viewBox="0 0 240 260" aria-label="主视觉"><use href="#product"></use></svg></div><div class="result-info"><div class="result-top"><span class="result-kind">主视觉</span><span class="status waiting"><span class="dot"></span><span data-card-status>待生成</span></span></div><h3>介绍产品与核心价值</h3><p>第一眼看清产品是什么，适合什么场景。</p><div class="result-bottom"><small>一张图，一个重点</small><button class="mini-btn" data-action="rerun" data-result-label="主视觉">单独重做</button></div></div></article>
+              <article class="result-card" data-result="problem"><div class="result-art warm"><div class="art-copy"><small>解决问题</small><strong>减少桌面<br>上的分心</strong><span>为阅读与工作保留清晰光线</span></div><svg viewBox="0 0 240 260" aria-label="解决问题"><use href="#product"></use></svg></div><div class="result-info"><div class="result-top"><span class="result-kind">解决问题</span><span class="status waiting"><span class="dot"></span><span data-card-status>待生成</span></span></div><h3>展示使用前后的改善</h3><p>让买家理解产品如何解决实际使用问题。</p><div class="result-bottom"><small>场景图</small><button class="mini-btn" data-action="rerun" data-result-label="解决问题">单独重做</button></div></div></article>
+              <article class="result-card" data-result="proof"><div class="result-art dark"><div class="art-copy light"><small>卖点证明</small><strong>一触切换<br>你的光线</strong><span>三档色温 · 无级调光 · 触控面板</span></div><svg viewBox="0 0 240 260" aria-label="卖点证明"><use href="#product"></use></svg></div><div class="result-info"><div class="result-top"><span class="result-kind">卖点证明</span><span class="status waiting"><span class="dot"></span><span data-card-status>待生成</span></span></div><h3>把卖点变成可见证据</h3><p>用产品结构、操作方式或真实场景支撑卖点。</p><div class="result-bottom"><small>重点信息图</small><button class="mini-btn" data-action="rerun" data-result-label="卖点证明">单独重做</button></div></div></article>
+              <article class="result-card" data-result="detail"><div class="result-art blue"><div class="art-copy"><small>细节特写</small><strong>看见稳定<br>的结构</strong><span>底座与灯臂的细节证明</span></div><svg viewBox="0 0 240 260" aria-label="细节特写"><use href="#product"></use></svg></div><div class="result-info"><div class="result-top"><span class="result-kind">细节特写</span><span class="status waiting"><span class="dot"></span><span data-card-status>待生成</span></span></div><h3>展示材质与关键细节</h3><p>让买家看清产品结构、材质与做工。</p><div class="result-bottom"><small>细节图</small><button class="mini-btn" data-action="rerun" data-result-label="细节特写">单独重做</button></div></div></article>
+              <article class="result-card" data-result="scene"><div class="result-art warm"><div class="art-copy"><small>使用场景</small><strong>你的桌面<br>刚刚好</strong><span>阅读、工作与夜间收纳</span></div><svg viewBox="0 0 240 260" aria-label="使用场景"><use href="#product"></use></svg></div><div class="result-info"><div class="result-top"><span class="result-kind">使用场景</span><span class="status waiting"><span class="dot"></span><span data-card-status>待生成</span></span></div><h3>让买家想象实际使用</h3><p>展示产品与空间、人物或日常动作的关系。</p><div class="result-bottom"><small>生活方式图</small><button class="mini-btn" data-action="rerun" data-result-label="使用场景">单独重做</button></div></div></article>
+            </div>
+            <div class="form-actions"><span class="muted">图片生成后可以单独重做，不需要重新生成整套。</span><button class="btn btn-quiet" data-action="back">← 修改商品信息</button></div>
+          </section>
+        </div>
+      </main>
+
+      <aside class="right-rail">
+        <section class="rail-section"><div class="right-title"><strong>本次生成</strong><span>摘要</span></div><div class="right-list"><div><span>商品</span><strong id="summaryProduct">LED 桌面灯</strong></div><div><span>平台</span><strong id="summaryPlatform">Amazon US</strong></div><div><span>语言</span><strong id="summaryLanguage">中文</strong></div><div><span>图片数量</span><strong>5 张</strong></div></div></section>
+        <section class="rail-section"><div class="right-title"><strong>生成进度</strong><span id="progressText">尚未开始</span></div><div class="progress-label"><span>套图完成度</span><strong id="progressPercent">0%</strong></div><div class="progress-track"><div class="progress-bar" id="progressBar"></div></div><p class="right-copy" id="progressHint" style="margin-top:10px">后台会自动处理商品一致性、事实边界和图片质量。前端只显示结果。</p></section>
+        <section class="rail-section"><div class="right-title"><strong>交付</strong><span>完成后可用</span></div><div class="export-box"><p>导出 5 张独立图片。事实整理、质量检查和版本信息会随任务保存，不会塞进用户下载包。</p><button class="btn" data-action="export">导出套图</button></div></section>
+      </aside>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"><span class="dot" style="color:var(--teal)"></span><span id="toastText">操作已更新</span></div>
+  <input id="hiddenFileInput" type="file" accept="image/png,image/jpeg" hidden>
+
+  <svg width="0" height="0" style="position:absolute"><defs>
+    <symbol id="product" viewBox="0 0 240 260">
+      <ellipse cx="121" cy="229" rx="72" ry="12" fill="#bab5a9" opacity=".55"/>
+      <path d="M72 211c0-10 14-17 48-17s49 7 49 17-15 17-49 17-48-7-48-17Z" fill="#292b2b"/>
+      <ellipse cx="120" cy="208" rx="48" ry="12" fill="#3e403e"/>
+      <path d="M101 204c2-7 5-15 6-25l3-92 18-1 4 93c0 9 3 18 7 25H101Z" fill="#333635"/>
+      <path d="m111 89 4-54 17 1 3 55-12 12-12-14Z" fill="#3c3f3d"/>
+      <path d="M114 35c-2-13 5-22 16-22 12 0 18 9 14 21l-12 42-18-2V35Z" fill="#2c2f2e"/>
+      <path d="M112 28c3-10 13-15 23-11 7 3 10 8 10 14l-8 22c-8 5-16 4-23-1l-3-24Z" fill="#363937"/>
+      <path d="M118 28h23" stroke="#e5e1d6" stroke-width="2" stroke-linecap="round" opacity=".75"/>
+      <path d="M91 216h58" stroke="#555753" stroke-width="2" opacity=".8"/>
+      <circle cx="119" cy="207" r="3" fill="#e8a020"/><circle cx="130" cy="207" r="2" fill="#99998f"/>
+      <path d="M100 214c8 4 31 5 42-1" stroke="#171918" stroke-width="2" fill="none" opacity=".65"/>
+    </symbol>
+  </defs></svg>
+
+  <script>
+    (function () {
+      'use strict';
+      var toastTimer;
+      var toast = function (message) {
+        var node = document.getElementById('toast');
+        document.getElementById('toastText').textContent = message;
+        node.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { node.classList.remove('show'); }, 2300);
+      };
+      var setView = function (view) {
+        document.querySelectorAll('.view-tab').forEach(function (tab) { tab.classList.toggle('active', tab.dataset.view === view); });
+        document.querySelectorAll('[data-view-panel]').forEach(function (panel) { panel.classList.toggle('active', panel.dataset.viewPanel === view); });
+      };
+      document.querySelectorAll('.view-tab').forEach(function (tab) { tab.addEventListener('click', function () { setView(tab.dataset.view); }); });
+      document.querySelector('[data-action="generate"]').addEventListener('click', function () {
+        var product = document.getElementById('productName').value.trim() || '未命名商品';
+        var platform = document.getElementById('platform').value;
+        var language = document.getElementById('language').value;
+        document.getElementById('summaryProduct').textContent = product;
+        document.getElementById('summaryPlatform').textContent = platform;
+        document.getElementById('summaryLanguage').textContent = language === 'English' ? 'English' : '中文';
+        document.getElementById('statusTitle').textContent = '正在生成你的 A+ 套图';
+        document.getElementById('statusText').textContent = '正在处理商品图片与卖点，请稍候。';
+        document.getElementById('progressText').textContent = '生成中';
+        document.getElementById('progressHint').textContent = '后台正在自动处理商品一致性与图片质量。';
+        document.getElementById('spinner').style.borderTopColor = 'var(--amber-2)';
+        document.getElementById('progressBar').style.width = '35%';
+        document.getElementById('progressPercent').textContent = '35%';
+        document.querySelectorAll('[data-card-status]').forEach(function (status) { status.textContent = '生成中'; });
+        setView('results');
+        toast('已开始生成 5 张 A+ 图片');
+        setTimeout(function () {
+          document.getElementById('statusTitle').textContent = 'A+ 套图已生成';
+          document.getElementById('statusText').textContent = '你可以查看全部图片，或只重做其中一张。';
+          document.getElementById('progressText').textContent = '已完成';
+          document.getElementById('progressHint').textContent = '商品一致性与图片质量已由后台自动检查。';
+          document.getElementById('progressBar').style.width = '100%';
+          document.getElementById('progressPercent').textContent = '100%';
+          document.querySelectorAll('[data-card-status]').forEach(function (status) { status.textContent = '已完成'; });
+          document.getElementById('spinner').style.borderColor = 'var(--teal)';
+          toast('A+ 套图已完成');
+        }, 950);
+      });
+      document.querySelectorAll('[data-action="rerun"]').forEach(function (button) { button.addEventListener('click', function () {
+        var card = button.closest('.result-card');
+        var label = button.dataset.resultLabel;
+        card.classList.add('selected');
+        var status = card.querySelector('.status');
+        var statusText = card.querySelector('[data-card-status]');
+        status.className = 'status waiting';
+        statusText.textContent = '重新生成';
+        toast(label + '已加入重做');
+        setTimeout(function () { status.className = 'status done'; statusText.textContent = '已完成'; card.classList.remove('selected'); toast(label + '已更新'); }, 700);
+      }); });
+      document.querySelectorAll('[data-action="changeImage"]').forEach(function (button) { button.addEventListener('click', function () { document.getElementById('hiddenFileInput').click(); }); });
+      document.getElementById('hiddenFileInput').addEventListener('change', function () { if (this.files[0]) { document.getElementById('fileName').textContent = this.files[0].name; toast('商品图片已更换'); } });
+      document.querySelector('[data-action="back"]').addEventListener('click', function () { setView('create'); });
+      document.querySelectorAll('[data-action="export"]').forEach(function (button) { button.addEventListener('click', function () { toast('导出包已准备，包含 5 张独立图片'); }); });
+      document.querySelector('[data-action="reset"]').addEventListener('click', function () { window.location.reload(); });
+    }());
+  </script>
+</body>
+</html>

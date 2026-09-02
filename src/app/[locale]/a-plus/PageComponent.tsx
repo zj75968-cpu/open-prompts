@@ -2,34 +2,30 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { uploadImageAsset } from '~/lib/assets/asset-api-client';
 import { OpenPromptsSiteHeader } from '~/components/open-prompts/OpenPromptsSiteHeader';
 import { MAX_GENERATION_REFERENCE_IMAGE_BYTES } from '~/lib/generation/image-input';
 import { aPlusImageUrl, generateAPlusModule, triggerDownload } from './a-plus-api';
 import {
+  A_PLUS_CANVAS_ASPECT_RATIOS,
   A_PLUS_MODULE_PLAN,
+  DEFAULT_A_PLUS_CANVAS_ASPECT_RATIO,
   createInitialAPlusModules,
   isAPlusInputValid,
   normalizeSellingPoints,
+  normalizeCanvasSellingPoints,
   type APlusInput,
   type APlusModuleId,
   type APlusModuleResult,
 } from '~/lib/a-plus/a-plus-domain';
+import { ContinuousCanvasPanel } from './ContinuousCanvasPanel';
 import './a-plus.css';
 
 type Props = { locale: string };
-type View = 'create' | 'results';
+type View = 'create' | 'results' | 'canvas';
+type GenerationMode = 'separate' | 'continuous';
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const value = typeof reader.result === 'string' ? reader.result : '';
-      value ? resolve(value) : reject(new Error('Unable to read product image'));
-    };
-    reader.onerror = () => reject(reader.error || new Error('Unable to read product image'));
-    reader.readAsDataURL(file);
-  });
-}
+const ENABLE_CONTINUOUS_CANVAS = false;
 
 const SUPPORTED_SOURCE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 
@@ -51,6 +47,7 @@ export default function PageComponent({ locale }: Props) {
     productName: '',
     category: '',
     sellingPoints: [],
+    canvasAspectRatio: undefined,
     platform: 'Amazon US',
     language: locale === 'zh' ? '中文' : 'English',
     style: '专业、简洁',
@@ -58,6 +55,7 @@ export default function PageComponent({ locale }: Props) {
     sourceImage: null,
   });
   const [sellingPointsText, setSellingPointsText] = useState('');
+  const [generationMode, setGenerationMode] = useState<GenerationMode>('separate');
   const [modules, setModules] = useState<APlusModuleResult[]>(createInitialAPlusModules);
   const [runStatus, setRunStatus] = useState<'idle' | 'running' | 'succeeded' | 'failed'>('idle');
   const [activeModuleId, setActiveModuleId] = useState<APlusModuleId | null>(null);
@@ -70,10 +68,15 @@ export default function PageComponent({ locale }: Props) {
     };
   }, [productImageUrl]);
 
-  const validInput = useMemo(
-    () => isAPlusInputValid({ ...input, sellingPoints: normalizeSellingPoints(sellingPointsText) }),
-    [input, sellingPointsText],
-  );
+  const validInput = useMemo(() => {
+    const sellingPoints = generationMode === 'continuous'
+      ? normalizeCanvasSellingPoints(sellingPointsText)
+      : normalizeSellingPoints(sellingPointsText);
+    if (generationMode === 'continuous') {
+      return Boolean(input.sourceImage && sellingPoints.length && (input.canvasAspectRatio || DEFAULT_A_PLUS_CANVAS_ASPECT_RATIO));
+    }
+    return isAPlusInputValid({ ...input, sellingPoints });
+  }, [generationMode, input, sellingPointsText]);
 
   const setField = useCallback(<K extends keyof APlusInput>(field: K, value: APlusInput[K]) => {
     setInput((current) => ({ ...current, [field]: value }));
@@ -93,16 +96,23 @@ export default function PageComponent({ locale }: Props) {
     const readToken = ++sourceReadTokenRef.current;
     setError(null);
     if (productImageUrl?.startsWith('blob:')) URL.revokeObjectURL(productImageUrl);
-    setProductImageUrl(URL.createObjectURL(file));
+    const previewUrl = URL.createObjectURL(file);
+    setProductImageUrl(previewUrl);
     setField('sourceImageName', file.name);
     setField('sourceImage', null);
-    setNotice(t('notices.imageReady'));
+    setNotice(null);
 
     try {
-      const dataUrl = await readFileAsDataUrl(file);
-      if (readToken === sourceReadTokenRef.current) setField('sourceImage', dataUrl);
+      const asset = await uploadImageAsset(file);
+      if (readToken !== sourceReadTokenRef.current) return;
+      setField('sourceImage', asset.url);
+      setNotice(t('notices.imageReady'));
     } catch (readError: unknown) {
       if (readToken !== sourceReadTokenRef.current) return;
+      URL.revokeObjectURL(previewUrl);
+      setProductImageUrl(null);
+      setField('sourceImageName', null);
+      setField('sourceImage', null);
       setError(readError instanceof Error ? readError.message : t('errors.missingFields'));
     }
   };
@@ -149,6 +159,7 @@ export default function PageComponent({ locale }: Props) {
       return;
     }
 
+    setInput(nextInput);
     setError(null);
     setNotice(null);
     setView('results');
@@ -156,8 +167,8 @@ export default function PageComponent({ locale }: Props) {
     setModules(createInitialAPlusModules());
 
     let allSucceeded = true;
-    for (const module of A_PLUS_MODULE_PLAN) {
-      const succeeded = await generateModule(module.id, nextInput);
+    for (const modulePlan of A_PLUS_MODULE_PLAN) {
+      const succeeded = await generateModule(modulePlan.id, nextInput);
       if (!succeeded) allSucceeded = false;
     }
     setRunStatus(allSucceeded ? 'succeeded' : 'failed');
@@ -198,6 +209,30 @@ export default function PageComponent({ locale }: Props) {
 
   const completedCount = modules.filter((module) => module.status === 'succeeded').length;
   const progress = Math.round((completedCount / modules.length) * 100);
+
+  const handleContinue = () => {
+    const nextInput = {
+      ...input,
+      sellingPoints: normalizeCanvasSellingPoints(sellingPointsText),
+      canvasAspectRatio: input.canvasAspectRatio || DEFAULT_A_PLUS_CANVAS_ASPECT_RATIO,
+    };
+    if (!nextInput.sourceImage || !nextInput.sellingPoints.length) {
+      setError(t('errors.missingCanvasFields'));
+      return;
+    }
+    setInput(nextInput);
+    setError(null);
+    setNotice(null);
+    setView('canvas');
+  };
+
+  const handleSubmitGenerationMode = () => {
+    if (ENABLE_CONTINUOUS_CANVAS && generationMode === 'continuous') {
+      handleContinue();
+      return;
+    }
+    void handleGenerate();
+  };
 
   return (
     <div className="a-plus-app">
@@ -248,6 +283,11 @@ export default function PageComponent({ locale }: Props) {
               <button type="button" role="tab" aria-selected={view === 'results'} className={view === 'results' ? 'active' : ''} onClick={() => setView('results')}>
                 {t('tabs.results')} {completedCount > 0 ? `· ${completedCount}` : ''}
               </button>
+              {ENABLE_CONTINUOUS_CANVAS ? (
+                <button type="button" role="tab" aria-selected={view === 'canvas'} className={view === 'canvas' ? 'active' : ''} onClick={() => setView('canvas')}>
+                  {t('tabs.canvas')}
+                </button>
+              ) : null}
             </div>
 
             {view === 'create' ? (
@@ -272,39 +312,94 @@ export default function PageComponent({ locale }: Props) {
                         <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={(event) => handleFileChange(event.target.files?.[0])} />
                       </div>
                     </div>
+                    <div className="a-plus-generation-mode">
+                      <div className="a-plus-generation-mode-heading">
+                        <div>
+                          <h3>{t('mode.title')}</h3>
+                          <p>{t('mode.hint')}</p>
+                        </div>
+                        <span>{t('mode.default')}</span>
+                      </div>
+                      <div className={`a-plus-generation-mode-options ${ENABLE_CONTINUOUS_CANVAS ? '' : 'single'}`} role="radiogroup" aria-label={t('mode.title')}>
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={generationMode === 'separate'}
+                          className={`a-plus-generation-mode-card ${generationMode === 'separate' ? 'selected' : ''}`}
+                          onClick={() => setGenerationMode('separate')}
+                        >
+                          <span className="a-plus-generation-mode-icon">5×</span>
+                          <span className="a-plus-generation-mode-copy"><strong>{t('mode.separateTitle')}</strong><span>{t('mode.separateDescription')}</span><small>{t('mode.separateMeta')}</small></span>
+                          <span className="a-plus-generation-mode-check" aria-hidden="true">{generationMode === 'separate' ? '✓' : ''}</span>
+                        </button>
+                        {ENABLE_CONTINUOUS_CANVAS ? (
+                          <button
+                            type="button"
+                            role="radio"
+                            aria-checked={generationMode === 'continuous'}
+                            className={`a-plus-generation-mode-card ${generationMode === 'continuous' ? 'selected' : ''}`}
+                            onClick={() => setGenerationMode('continuous')}
+                          >
+                            <span className="a-plus-generation-mode-icon">↕</span>
+                            <span className="a-plus-generation-mode-copy"><strong>{t('mode.continuousTitle')}</strong><span>{t('mode.continuousDescription')}</span><small>{t('mode.continuousMeta')}</small></span>
+                            <span className="a-plus-generation-mode-check" aria-hidden="true">{generationMode === 'continuous' ? '✓' : ''}</span>
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                    {ENABLE_CONTINUOUS_CANVAS && generationMode === 'continuous' ? (
+                      <label className="a-plus-field a-plus-field-full a-plus-canvas-prompt-field">
+                        <span>{t('fields.canvasSize')}</span>
+                        <select
+                          value={input.canvasAspectRatio || DEFAULT_A_PLUS_CANVAS_ASPECT_RATIO}
+                          onChange={(event) => setField('canvasAspectRatio', event.target.value as APlusInput['canvasAspectRatio'])}
+                        >
+                          {A_PLUS_CANVAS_ASPECT_RATIOS.map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}
+                        </select>
+                        <small>{t('fields.canvasSizeHint')}</small>
+                      </label>
+                    ) : null}
                     <div className="a-plus-field-grid">
-                      <label className="a-plus-field">
-                        <span>{t('fields.productName')}</span>
-                        <input value={input.productName} onChange={(event) => setField('productName', event.target.value)} placeholder={t('fields.productNamePlaceholder')} />
-                      </label>
-                      <label className="a-plus-field">
-                        <span>{t('fields.category')}</span>
-                        <input value={input.category} onChange={(event) => setField('category', event.target.value)} placeholder={t('fields.categoryPlaceholder')} />
-                      </label>
+                      {generationMode === 'separate' ? (
+                        <>
+                          <label className="a-plus-field">
+                            <span>{t('fields.productName')}</span>
+                            <input value={input.productName} onChange={(event) => setField('productName', event.target.value)} placeholder={t('fields.productNamePlaceholder')} />
+                          </label>
+                          <label className="a-plus-field">
+                            <span>{t('fields.category')}</span>
+                            <input value={input.category} onChange={(event) => setField('category', event.target.value)} placeholder={t('fields.categoryPlaceholder')} />
+                          </label>
+                        </>
+                      ) : null}
                       <label className="a-plus-field a-plus-field-full">
-                        <span>{t('fields.sellingPoints')}</span>
-                        <textarea value={sellingPointsText} onChange={(event) => setSellingPointsText(event.target.value)} placeholder={t('fields.sellingPointsPlaceholder')} />
-                        <small>{t('fields.sellingPointsHint')}</small>
+                        <span>{t(generationMode === 'continuous' ? 'fields.canvasPrompt' : 'fields.sellingPoints')}</span>
+                        <textarea value={sellingPointsText} onChange={(event) => setSellingPointsText(event.target.value)} placeholder={t(generationMode === 'continuous' ? 'fields.canvasPromptPlaceholder' : 'fields.sellingPointsPlaceholder')} />
+                        <small>{t(generationMode === 'continuous' ? 'fields.canvasPromptHint' : 'fields.sellingPointsHint')}</small>
                       </label>
-                      <label className="a-plus-field">
-                        <span>{t('fields.platform')}</span>
-                        <select value={input.platform} onChange={(event) => setField('platform', event.target.value)}>
-                          <option>Amazon US</option>
-                          <option>{t('options.genericCommerce')}</option>
-                        </select>
-                      </label>
-                      <label className="a-plus-field">
-                        <span>{t('fields.language')}</span>
-                        <select value={input.language} onChange={(event) => setField('language', event.target.value)}>
-                          <option>English</option>
-                          <option>中文</option>
-                        </select>
-                      </label>
+                      {generationMode === 'separate' ? (
+                        <>
+                          <label className="a-plus-field">
+                            <span>{t('fields.platform')}</span>
+                            <select value={input.platform} onChange={(event) => setField('platform', event.target.value)}>
+                              <option>Amazon US</option>
+                              <option>{t('options.genericCommerce')}</option>
+                            </select>
+                          </label>
+                          <label className="a-plus-field">
+                            <span>{t('fields.language')}</span>
+                            <select value={input.language} onChange={(event) => setField('language', event.target.value)}>
+                              <option>English</option>
+                              <option>中文</option>
+                            </select>
+                          </label>
+                        </>
+                      ) : null}
                     </div>
                     <div className="a-plus-form-actions">
                       <span className="a-plus-muted">{t('create.footerHint')}</span>
-                      <button type="button" className="a-plus-button a-plus-button-primary" disabled={!validInput || runStatus === 'running'} onClick={() => void handleGenerate()}>
-                        {runStatus === 'running' ? t('actions.generating') : t('actions.generate')}
+                      <button type="button" className="a-plus-button a-plus-button-primary" disabled={!validInput || runStatus === 'running'} onClick={handleSubmitGenerationMode}>
+                        {runStatus === 'running' ? t('actions.generating') : generationMode === 'continuous' ? t('actions.continueToCanvas') : t('actions.generate')}
                         <span aria-hidden="true">→</span>
                       </button>
                     </div>
@@ -312,7 +407,7 @@ export default function PageComponent({ locale }: Props) {
                   </div>
                 </div>
               </section>
-            ) : (
+            ) : view === 'results' ? (
               <section className="a-plus-view" aria-labelledby="a-plus-results-title">
                 <div className="a-plus-results-head">
                   <div>
@@ -350,6 +445,11 @@ export default function PageComponent({ locale }: Props) {
                 </div>
                 <button type="button" className="a-plus-back-button" onClick={() => setView('create')}>← {t('actions.back')}</button>
               </section>
+            ) : (
+              <ContinuousCanvasPanel
+                locale={locale}
+                input={{ ...input, sellingPoints: normalizeCanvasSellingPoints(sellingPointsText) }}
+              />
             )}
 
             {notice ? <div className="a-plus-notice">{notice}</div> : null}
@@ -359,13 +459,20 @@ export default function PageComponent({ locale }: Props) {
         <aside className="a-plus-rail a-plus-right-rail">
           <div className="a-plus-rail-title">{t('rail.planTitle')} <span>{completedCount}/{modules.length}</span></div>
           <div className="a-plus-plan-list">
-            {modules.map((module) => (
+            {generationMode === 'separate' ? modules.map((module) => (
               <button key={module.id} type="button" className={`a-plus-plan-card ${activeModuleId === module.id ? 'selected' : ''}`} onClick={() => setView('results')}>
                 <span className="a-plus-plan-number">{module.id}</span>
                 <span className="a-plus-plan-copy"><strong>{t(module.titleKey as any)}</strong><span>{t(module.roleKey as any)}</span></span>
                 <span className="a-plus-plan-arrow">›</span>
               </button>
-            ))}
+            )) : null}
+            {ENABLE_CONTINUOUS_CANVAS ? (
+              <button type="button" className={`a-plus-plan-card ${view === 'canvas' ? 'selected' : ''}`} onClick={() => setView('canvas')}>
+                <span className="a-plus-plan-number">{input.canvasAspectRatio || DEFAULT_A_PLUS_CANVAS_ASPECT_RATIO}</span>
+                <span className="a-plus-plan-copy"><strong>{t('tabs.canvas')}</strong><span>{t('rail.autoBody')}</span></span>
+                <span className="a-plus-plan-arrow">›</span>
+              </button>
+            ) : null}
           </div>
           <div className="a-plus-plan-tip">{t('rail.planTip')}</div>
         </aside>

@@ -17,6 +17,8 @@ export type CreateGenerationRequest = Required<
   >
 > & {
   apiKey?: string;
+  negativePrompt?: string;
+  referenceImages?: GenerationCreateRequestDto['referenceImages'];
 };
 
 export type CreateGenerationResponse = {
@@ -52,6 +54,8 @@ export async function createGeneration(
   const response = await createGenerationJob(locale, {
     provider: request.provider === 'internal' ? undefined : request.provider,
     prompt: request.prompt,
+    negativePrompt: request.negativePrompt?.trim() || undefined,
+    referenceImages: request.referenceImages,
     apiKey:
       request.provider === 'internal' ? undefined : request.apiKey || undefined,
     model: request.model,

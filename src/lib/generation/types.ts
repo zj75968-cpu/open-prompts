@@ -15,6 +15,7 @@ export type GenerationCreateParams = {
   model?: string;
   aspectRatio?: string;
   quality?: string;
+  inputFidelity?: 'high' | 'low';
   count?: number;
   /** Public URL, data URL, or a serializable image input object. */
   referenceImages?: GenerationImageInput[];

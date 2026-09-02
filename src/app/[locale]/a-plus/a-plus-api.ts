@@ -27,9 +27,21 @@ function errorMessage(value: unknown, fallback: string): string {
 export function aPlusImageUrl(locale: string, value: string): string {
   const url = String(value || '').trim();
   if (!url) return '';
+  if (/^data:image\//i.test(url)) {
+    const separator = url.indexOf(',');
+    return separator >= 0
+      ? `${url.slice(0, separator + 1)}${url.slice(separator + 1).replace(/\s+/g, '')}`
+      : url;
+  }
+  // A few OpenAI-compatible gateways return bare Base64 instead of `b64_json`.
+  if (url.length > 128 && /^[a-z0-9+/]+={0,2}$/i.test(url)) {
+    return `data:image/png;base64,${url.replace(/\s+/g, '')}`;
+  }
   if (url.startsWith('/') && !url.startsWith('//')) return url;
-  if (!/^https?:\/\//i.test(url)) return url;
-  return `${localeApiPath(locale, '/api/image-proxy')}?url=${encodeURIComponent(url)}`;
+  if (/^https?:\/\//i.test(url)) {
+    return `${localeApiPath(locale, '/api/image-proxy')}?url=${encodeURIComponent(url)}`;
+  }
+  return url;
 }
 
 function sleep(ms: number): Promise<void> {

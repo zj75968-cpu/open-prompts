@@ -1,4 +1,5 @@
 import {
+  getAdminTemplate,
   getAdminTemplatesPage,
   getAdminUser,
   getAdminUsersPage,
@@ -18,7 +19,7 @@ import {
   type MyTemplatesPage,
 } from '~/lib/account/my-templates-page';
 import type {
-  AdminTemplateRecord,
+  AdminTemplateSummary,
   TemplateRecord,
 } from '~/lib/prompts/template-types';
 import type {
@@ -36,7 +37,7 @@ export type MyTemplatesStats = {
 };
 
 export type AdminTemplatesPageData = {
-  items: AdminTemplateRecord[];
+  items: AdminTemplateSummary[];
   total: number | null;
   hasMore: boolean;
   pendingCount: number | null;
@@ -137,6 +138,15 @@ export async function loadAdminTemplatesPage(
       promptsDailyTrend: data?.promptsDailyTrend ?? [],
     },
   };
+}
+
+export async function loadAdminTemplateDetail(
+  locale: string,
+  id: number,
+): Promise<TemplateRecord | null> {
+  const response = await getAdminTemplate(locale, id);
+  if (!response.ok || isAccountApiErrorResponse(response.data)) return null;
+  return response.data.item;
 }
 
 export async function loadAdminTemplatesBadge(

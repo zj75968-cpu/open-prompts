@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
@@ -136,8 +135,11 @@ export function OpenPromptsSiteHeader({
     <header className={`sticky top-0 ${stickyZClass} border-b border-[var(--border)] bg-[var(--bg)]`}>
       <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between px-6">
         <a href={locale === 'en' ? '/' : `/${locale}`} className="flex items-center gap-2 text-sm font-semibold tracking-wide">
-          <span className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-lg">
-            <Image src="/logo.png" alt="Open Prompts" fill sizes="32px" className="object-contain" priority />
+          <span
+            className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--border)] bg-[color-mix(in_oklab,var(--amber)_14%,var(--surface))] text-sm font-black text-[var(--amber2)]"
+            aria-hidden="true"
+          >
+            ✦
           </span>
           <span>
             Open <span className="italic text-[var(--amber2)]">Prompts</span>

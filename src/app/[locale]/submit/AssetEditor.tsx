@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { uploadImageAsset } from '~/lib/assets/asset-api-client';
 import { MAX_RESULT_IMAGES } from './submit-types';
 import { isValidImageSrc } from './submit-utils';
 
@@ -13,15 +14,6 @@ export type AssetEditorProps = {
   onRemoveImage: (index: number) => void;
 };
 
-function readImageFile(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
 export function AssetEditor({
   images,
   imagesFull,
@@ -32,25 +24,38 @@ export function AssetEditor({
   const t = useTranslations('OpenPrompts.submitPage');
   const [urlDraft, setUrlDraft] = useState('');
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadingCount, setUploadingCount] = useState(0);
   const [uploadDrag, setUploadDrag] = useState(false);
 
   const handleFiles = (files: FileList | null) => {
-    if (!files?.length) return;
+    if (!files?.length || uploadingCount > 0) return;
+    const room = Math.max(0, MAX_RESULT_IMAGES - images.length);
+    const selected = Array.from(files).slice(0, room);
+    if (!selected.length) return;
+
+    setUploadError(null);
+    setUploadingCount(selected.length);
     void (async () => {
-      const dataUrls: string[] = [];
-      for (const file of Array.from(files)) {
-        if (dataUrls.length >= MAX_RESULT_IMAGES) break;
+      const uploadedUrls: string[] = [];
+      for (const file of selected) {
         try {
+          // Keep uploads sequential to bound Worker and browser memory usage.
           // eslint-disable-next-line no-await-in-loop
-          dataUrls.push(await readImageFile(file));
-        } catch {
+          const asset = await uploadImageAsset(file);
+          uploadedUrls.push(asset.url);
+        } catch (error: unknown) {
+          setUploadError(error instanceof Error ? error.message : 'Image upload failed.');
           break;
         }
       }
-      if (dataUrls.length > 0) onAppendImages(dataUrls);
+      setUploadingCount(0);
+      if (uploadedUrls.length > 0) onAppendImages(uploadedUrls);
     })();
     setUploadDrag(false);
   };
+
+  const uploadDisabled = imagesFull || uploadingCount > 0;
 
   const addImageUrl = () => {
     const raw = urlDraft.trim();
@@ -90,9 +95,9 @@ export function AssetEditor({
         </div>
         <div
           id="upload-zone"
-          className={`op-sp-upload${uploadDrag ? ' op-drag' : ''}${imagesFull ? ' op-sp-upload--full' : ''}`}
+          className={`op-sp-upload${uploadDrag ? ' op-drag' : ''}${uploadDisabled ? ' op-sp-upload--full' : ''}`}
           onDragOver={(event) => {
-            if (imagesFull) return;
+            if (uploadDisabled) return;
             event.preventDefault();
             setUploadDrag(true);
           }}
@@ -107,14 +112,24 @@ export function AssetEditor({
             type="file"
             accept="image/*"
             multiple
-            disabled={imagesFull}
-            onChange={(event) => handleFiles(event.target.files)}
+            disabled={uploadDisabled}
+            onChange={(event) => {
+              handleFiles(event.target.files);
+              event.target.value = '';
+            }}
           />
-          <div className="text-sm font-medium text-[var(--text)]">{imagesFull ? '✓' : '↑'}</div>
+          <div className="text-sm font-medium text-[var(--text)]">
+            {uploadingCount > 0 ? '…' : imagesFull ? '✓' : '↑'}
+          </div>
           <div className="mt-1 text-xs text-[var(--text3)]">
-            {imagesFull ? t('hints.uploadFull') : t('hints.upload')}
+            {uploadingCount > 0
+              ? `${uploadingCount} image${uploadingCount === 1 ? '' : 's'} uploading…`
+              : imagesFull
+                ? t('hints.uploadFull')
+                : t('hints.upload')}
           </div>
         </div>
+        {uploadError ? <p className="mt-1.5 text-xs text-[var(--coral)]">{uploadError}</p> : null}
 
         <div className="mt-4">
           <label className="op-sp-label" htmlFor="f-img-url">

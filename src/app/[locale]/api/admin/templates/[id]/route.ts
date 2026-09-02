@@ -4,9 +4,15 @@ import type {
   AdminTemplateReviewRequestDto,
   AdminTemplateReviewResponseDto,
 } from '~/lib/account/account-dto';
+import { reconcilePromptImageAssetVisibility } from '~/lib/assets/asset-service';
 import { getDb } from '~/db/client';
 import { requireAdminSession } from '~/lib/auth/session';
-import { adminSetReviewStatus, getTemplateById, parseReviewStatus } from '~/lib/prompts/template-record';
+import {
+  adminSetReviewStatus,
+  getTemplateById,
+  getTemplateByIdForUpdate,
+  parseReviewStatus,
+} from '~/lib/prompts/template-record';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,9 +47,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   try {
-    const item = await adminSetReviewStatus(db, id, status);
-    if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const response: AdminTemplateReviewResponseDto = { ok: true, item };
+    const result = await db.transaction(async (tx) => {
+      const transactionDb = tx as unknown as typeof db;
+      const existing = await getTemplateByIdForUpdate(transactionDb, id);
+      if (!existing) return null;
+      const updated = await adminSetReviewStatus(transactionDb, id, status);
+      if (updated) {
+        await reconcilePromptImageAssetVisibility({
+          db: transactionDb,
+          images: existing.images,
+        });
+      }
+      return updated;
+    });
+    if (!result) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const response: AdminTemplateReviewResponseDto = { ok: true, ...result };
     return NextResponse.json(response);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Update failed';

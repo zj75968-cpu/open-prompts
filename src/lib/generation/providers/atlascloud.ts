@@ -17,25 +17,111 @@ type AtlascloudCreateResponse = {
 
 type AtlascloudPollResponse = {
   status?: string;
-  outputs?: string[];
+  outputs?: unknown;
+  images?: unknown;
+  output?: unknown;
   error?: unknown;
   data?: {
     id?: string;
     status?: string;
-    outputs?: string[];
+    outputs?: unknown;
     error?: unknown;
     output?: unknown;
-    images?: string[];
+    images?: unknown;
   };
 };
 
-function mapStatus(status?: string): GenerationPollResult['status'] {
-  const s = (status || '').toLowerCase();
-  if (s.includes('run') || s.includes('process') || s.includes('start')) return 'running';
-  if (s.includes('succeed') || s.includes('success') || s === 'done') return 'succeeded';
-  if (s.includes('complete')) return 'succeeded';
-  if (s.includes('fail') || s.includes('error') || s.includes('cancel')) return 'failed';
+function mapStatus(status: string | undefined): GenerationCreateResult['status'] {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (
+    normalized === 'succeeded' ||
+    normalized === 'success' ||
+    normalized === 'completed' ||
+    normalized === 'complete' ||
+    normalized === 'done' ||
+    normalized.includes('succeed') ||
+    normalized.includes('complete')
+  ) {
+    return 'succeeded';
+  }
+  if (
+    normalized === 'failed' ||
+    normalized === 'failure' ||
+    normalized === 'error' ||
+    normalized === 'canceled' ||
+    normalized === 'cancelled' ||
+    normalized.includes('fail') ||
+    normalized.includes('error') ||
+    normalized.includes('cancel')
+  ) {
+    return 'failed';
+  }
+  if (
+    normalized === 'running' ||
+    normalized === 'processing' ||
+    normalized === 'in_progress' ||
+    normalized === 'in-progress' ||
+    normalized === 'generating' ||
+    normalized.includes('process') ||
+    normalized.includes('run') ||
+    normalized.includes('start')
+  ) {
+    return 'running';
+  }
   return 'queued';
+}
+
+function imageValue(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (!value || typeof value !== 'object') return null;
+  const item = value as { url?: unknown; image_url?: unknown; b64_json?: unknown };
+  if (typeof item.url === 'string' && item.url.trim()) return item.url.trim();
+  if (typeof item.image_url === 'string' && item.image_url.trim()) return item.image_url.trim();
+  if (typeof item.b64_json === 'string' && item.b64_json.trim()) {
+    return `data:image/png;base64,${item.b64_json.trim()}`;
+  }
+  return null;
+}
+
+function imageList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => {
+      const direct = imageValue(item);
+      if (direct) return [direct];
+      if (item && typeof item === 'object') {
+        const nested = item as { images?: unknown; output?: unknown; outputs?: unknown };
+        return [
+          ...imageList(nested.images),
+          ...imageList(nested.output),
+          ...imageList(nested.outputs),
+        ];
+      }
+      return [];
+    });
+  }
+
+  const direct = imageValue(value);
+  if (direct) return [direct];
+  if (!value || typeof value !== 'object') return [];
+  const nested = value as { images?: unknown; output?: unknown; outputs?: unknown };
+  return [
+    ...imageList(nested.images),
+    ...imageList(nested.output),
+    ...imageList(nested.outputs),
+  ];
+}
+
+function extractPollImages(json: AtlascloudPollResponse): string[] | undefined {
+  const images = [
+    ...imageList(json.outputs),
+    ...imageList(json.images),
+    ...imageList(json.output),
+    ...imageList(json.data?.outputs),
+    ...imageList(json.data?.images),
+    ...imageList(json.data?.output),
+  ];
+  const unique = Array.from(new Set(images));
+  return unique.length ? unique : undefined;
 }
 
 export function createAtlascloudProvider(): ImageGenerationProvider {
@@ -99,6 +185,7 @@ export function createAtlascloudProviderWithOptions(opts?: { baseUrl?: string; a
         String(process.env.ATLASCLOUD_REFERENCE_IMAGE_FIELD || 'image_urls').trim() ||
         'image_urls';
       const input: Record<string, unknown> = { prompt: params.prompt };
+      if (params.negativePrompt) input.negative_prompt = params.negativePrompt;
       if (imageInputs.length) input[referenceImageField] = imageInputs;
 
       const startedAt = Date.now();
@@ -163,13 +250,7 @@ export function createAtlascloudProviderWithOptions(opts?: { baseUrl?: string; a
       }
       const json = (await res.json()) as AtlascloudPollResponse;
       const status = mapStatus(json.data?.status || json.status);
-      const outputs = json.data?.outputs || json.outputs;
-      const images =
-        status === 'succeeded'
-          ? (Array.isArray(outputs) ? outputs : undefined) ||
-            (Array.isArray((json.data as any)?.images) ? ((json.data as any).images as string[]) : undefined) ||
-            (Array.isArray((json.data as any)?.output?.images) ? ((json.data as any).output.images as string[]) : undefined)
-          : undefined;
+      const images = status === 'succeeded' ? extractPollImages(json) : undefined;
       const error = status === 'failed' ? String(json.data?.error ?? json.error ?? 'failed') : undefined;
       console.info('[op:provider:atlascloud:poll:done]', {
         providerJobId,

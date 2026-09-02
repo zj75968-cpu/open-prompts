@@ -3,9 +3,13 @@ import type {
   MyTemplatesBulkDeleteRequestDto,
   MyTemplatesBulkDeleteResponseDto,
 } from '~/lib/account/account-dto';
+import { reconcilePromptImageAssetVisibility } from '~/lib/assets/asset-service';
 import { getDb } from '~/db/client';
 import { requireAuthSession } from '~/lib/auth/session';
-import { bulkDeleteUserTemplates } from '~/lib/prompts/template-record';
+import {
+  bulkDeleteUserTemplates,
+  getTemplateImagesByIds,
+} from '~/lib/prompts/template-record';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +46,18 @@ export async function DELETE(req: Request) {
   }
 
   try {
-    const deleted = await bulkDeleteUserTemplates(db, ids, session.user.id);
+    const deleted = await db.transaction(async (tx) => {
+      const transactionDb = tx as unknown as typeof db;
+      const images = await getTemplateImagesByIds(
+        transactionDb,
+        ids,
+        session.user.id,
+        true,
+      );
+      const count = await bulkDeleteUserTemplates(transactionDb, ids, session.user.id);
+      await reconcilePromptImageAssetVisibility({ db: transactionDb, images });
+      return count;
+    });
     const response: MyTemplatesBulkDeleteResponseDto = { ok: true, deleted };
     return NextResponse.json(response);
   } catch (e: unknown) {

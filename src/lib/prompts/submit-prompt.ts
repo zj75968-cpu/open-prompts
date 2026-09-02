@@ -1,5 +1,9 @@
 import { randomBytes } from 'node:crypto';
 
+import {
+  imageAssetIdFromReference,
+  normalizeImageAssetReference,
+} from '~/lib/assets/asset-types';
 import type { Db } from '~/db/client';
 import { prompts } from '~/db/schema';
 import {
@@ -34,7 +38,7 @@ const MAX_DESC = 2000;
 const MAX_TAG_LEN = 48;
 const MAX_TAGS = 10;
 const MAX_IMAGES = 8;
-const MAX_IMAGE_CHARS = 600_000;
+const MAX_IMAGE_CHARS = 2_000;
 
 export type ParsedSubmitPrompt = {
   title: string;
@@ -82,8 +86,8 @@ function normalizeImages(value: unknown): string[] {
     if (typeof v !== 'string') continue;
     const t = v.trim();
     if (!t) continue;
-    if (!/^https?:\/\//i.test(t) && !t.startsWith('data:')) continue;
-    out.push(t.slice(0, MAX_IMAGE_CHARS));
+    if (!/^https?:\/\//i.test(t) && !imageAssetIdFromReference(t)) continue;
+    out.push(normalizeImageAssetReference(t).slice(0, MAX_IMAGE_CHARS));
   }
   return out;
 }
@@ -137,6 +141,12 @@ export function parseSubmitPromptBody(
 
   const tags = tagList.slice(0, MAX_TAGS);
 
+  if (
+    Array.isArray(o.images) &&
+    o.images.some((value) => typeof value === 'string' && /^data:/i.test(value.trim()))
+  ) {
+    return { ok: false, error: 'Base64 image data is not accepted. Upload the image first.' };
+  }
   const images = normalizeImages(o.images);
 
   const sourceUrl = normalizeSourceUrl(o.sourceUrl);

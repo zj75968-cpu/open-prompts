@@ -22,8 +22,22 @@ export type TemplateRecord = PromptContent & {
   updatedAt: string;
 };
 
-/** Admin list: template plus optional owner email from `p_users`. */
+/** Admin detail: full template plus optional owner email. */
 export type AdminTemplateRecord = TemplateRecord & {
+  submitterEmail: string | null;
+};
+
+/** Lightweight admin list row. Large prompt bodies and image arrays load on demand. */
+export type AdminTemplateSummary = {
+  id: number;
+  title: string;
+  model: string;
+  status: PromptReviewStatus;
+  visibility: PromptVisibility;
+  submittedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  thumbnailUrl: string | null;
   submitterEmail: string | null;
 };
 

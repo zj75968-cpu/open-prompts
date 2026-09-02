@@ -38,6 +38,7 @@ export type GenerationHistoryEntry = {
   createdAt: number;
   providerJobId: string | null;
   prompt: string;
+  negativePrompt: string;
   model: string;
   provider: string;
   aspectRatio: string;

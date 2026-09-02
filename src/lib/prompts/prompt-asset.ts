@@ -189,6 +189,28 @@ function inferCreatedAt(imageUrls: readonly string[]): string | undefined {
   return undefined;
 }
 
+function isBrowserImageReference(value: string): boolean {
+  return /^(?:https?:\/\/|data:|blob:|\/)/i.test(value);
+}
+
+const BUNDLED_PROMPT_IMAGE_PREFIX = '/local_images/gpt-image2-prompts/';
+
+/**
+ * Removes import-only filenames and prefers the preserved CDN sources when the
+ * corresponding bundled image directory is not part of the deployment.
+ */
+export function normalizePromptImageReferences(values: readonly string[]): string[] {
+  const references = uniqueStrings(values).filter(isBrowserImageReference);
+  const remoteReferences = references.filter((value) => /^https?:\/\//i.test(value));
+  const hasBundledImportReference = references.some((value) =>
+    value.startsWith(BUNDLED_PROMPT_IMAGE_PREFIX),
+  );
+
+  return hasBundledImportReference && remoteReferences.length > 0
+    ? remoteReferences
+    : references;
+}
+
 function pickImageUrls(record: Record<string, unknown>): string[] {
   const combined = mergeStringLists(
     asStringArray(record.images),
@@ -196,7 +218,7 @@ function pickImageUrls(record: Record<string, unknown>): string[] {
     asStringArray(record.remote_images),
   );
   const single = asString(record.imageUrl) ?? asString(record.image_url);
-  return uniqueStrings([...(single ? [single] : []), ...combined]);
+  return normalizePromptImageReferences([...(single ? [single] : []), ...combined]);
 }
 
 function pickString(...values: unknown[]): string {

@@ -1,5 +1,4 @@
 import { requestJson, type JsonResponse } from '~/lib/api/json-client';
-import { getOrCreateUserId } from '~/lib/credits/fingerprint';
 import type {
   GenerationApiResponseDto,
   GenerationCreateRequestDto,
@@ -17,7 +16,6 @@ export function createGenerationJob(
     GenerationCreateRequestDto
   >(localeApiPath(locale, '/api/generations'), {
     method: 'POST',
-    headers: { 'x-op-user-id': getOrCreateUserId() },
     body: request,
   });
 }

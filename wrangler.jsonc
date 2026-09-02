@@ -3,7 +3,7 @@
   "name": "open-prompts",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-03-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
@@ -11,6 +11,19 @@
   "observability": {
     "enabled": true
   },
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "proimage.n8nmydomain.com/*",
+      "zone_name": "n8nmydomain.com"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "IMAGE_ASSETS",
+      "bucket_name": "open-prompts-image-assets"
+    }
+  ],
   "vars": {
     "DEFAULT_IMAGE_PROVIDER": "openai-compatible",
     "OPENAI_IMAGE_BASE_URL": "https://api.viralee.top",

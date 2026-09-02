@@ -1,9 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { AdminTemplateRecord, TemplateRecord } from '~/lib/prompts/template-types';
+import type {
+  AdminTemplateRecord,
+  AdminTemplateSummary,
+} from '~/lib/prompts/template-types';
 import type { AdminUserTrendRange } from '~/lib/users/admin-user-trend';
 import type { AccountTranslateFn } from './account-actions';
+import { loadAdminTemplateDetail } from './account-api';
 import { AccountDailyTrend, AccountPagination } from './account-list-components';
 import {
   AccountTemplateDetailDialog,
@@ -77,8 +81,7 @@ export function AdminTemplatesPanel({
     });
   };
 
-  const toggleSelectAll = (items: (TemplateRecord | AdminTemplateRecord)[]) => {
-    const pageIds = items.map((item) => item.id);
+  const toggleSelectAll = (pageIds: number[]) => {
     const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -88,6 +91,16 @@ export function AdminTemplatesPanel({
       }
       return next;
     });
+  };
+
+  const openAdminDetail = async (summary: AdminTemplateSummary) => {
+    const item = await loadAdminTemplateDetail(locale, summary.id);
+    if (!item) return;
+    const source: AdminTemplateRecord = {
+      ...item,
+      submitterEmail: summary.submitterEmail,
+    };
+    detail.openDetail(source, true);
   };
 
   return (
@@ -197,7 +210,9 @@ export function AdminTemplatesPanel({
           onToggleAll: toggleSelectAll,
         }}
         emptyMessage={statusFilter === 'pending' ? t('admin.emptyPending') : t('admin.empty')}
-        onOpenDetail={(item) => detail.openDetail(item, true)}
+        onOpenDetail={(item) => {
+          if ('thumbnailUrl' in item) void openAdminDetail(item);
+        }}
         onReview={(id, status) => void content.review(id, status)}
       />
 

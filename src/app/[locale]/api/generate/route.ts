@@ -1,27 +1,13 @@
-import {apiKey, baseUrl, model} from "~/configs/openai";
+import { NextResponse } from 'next/server';
 
-export async function POST(req: Request) {
+export const dynamic = 'force-dynamic';
 
-  const json = await req.json();
-
-  const prompt = json.prompt;
-
-  const body = {
-    "model": model,
-    "prompt": prompt,
-    "size": "1920X1080"
-  }
-
-  const result = await fetch(`${baseUrl}/v1/video/generations`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${apiKey}`
+export async function POST() {
+  return NextResponse.json(
+    {
+      error: 'This legacy generation endpoint is disabled.',
+      hint: 'Use POST /api/generations so successful image outputs are persisted to Cloudflare R2.',
     },
-  }).then(v => v.json()).catch(err => console.log(err));
-  return new Response(JSON.stringify(result), {
-    headers: { "Content-Type": "application/json" },
-    status: 200
-  });
+    { status: 410 },
+  );
 }

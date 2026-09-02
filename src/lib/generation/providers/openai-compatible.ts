@@ -41,8 +41,16 @@ function editEndpointFromBaseUrl(baseUrl: string) {
 
 function imageSize(aspectRatio?: string) {
   const ratio = String(aspectRatio || '').replace(/\s+/g, '');
-  if (['9:16', '2:3', '3:4', '4:5'].includes(ratio)) return '1024x1536';
-  if (['16:9', '3:2', '4:3', '5:4', '2:1'].includes(ratio)) return '1536x1024';
+  // These are the closest valid GPT Image 2 dimensions for the A+ canvas
+  // ratios used by the page. Every edge is a multiple of 16.
+  if (ratio === '2:1') return '1536x768';
+  if (ratio === '1464:600') return '976x400';
+  if (ratio === '1464:1800') return '976x1200';
+  if (ratio === '1464:2400') return '976x1600';
+  if (ratio === '4:5') return '1408x1760';
+  if (ratio === '2:3') return '1440x2160';
+  if (['9:16', '3:4'].includes(ratio)) return '1024x1536';
+  if (['16:9', '3:2', '4:3', '5:4'].includes(ratio)) return '1536x1024';
   return '1024x1024';
 }
 
@@ -54,9 +62,10 @@ function imageQuality(quality?: string) {
 }
 
 function dataUrl(value: unknown) {
-  return typeof value === 'string' && value.trim()
-    ? `data:image/png;base64,${value.trim()}`
-    : null;
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const normalized = value.trim();
+  if (normalized.startsWith('data:image/')) return normalized;
+  return `data:image/png;base64,${normalized.replace(/\s+/g, '')}`;
 }
 
 function stringUrl(value: unknown) {
@@ -69,7 +78,17 @@ function stringUrl(value: unknown) {
 }
 
 function imageFromPayload(value: unknown) {
-  if (typeof value === 'string') return value.trim() || null;
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    if (!normalized) return null;
+    if (/^(?:data:image\/|https?:\/\/|\/\/|\/)/i.test(normalized)) return normalized;
+    // Some OpenAI-compatible gateways return bare Base64 strings in `data` or `images`
+    // instead of an object with a `b64_json` field.
+    if (normalized.length > 128 && /^[a-z0-9+/]+={0,2}$/i.test(normalized)) {
+      return dataUrl(normalized);
+    }
+    return normalized;
+  }
   if (!value || typeof value !== 'object') return null;
   const payload = value as ImagePayload;
   return stringUrl(payload.url) || stringUrl(payload.image_url) || dataUrl(payload.b64_json);
@@ -123,6 +142,13 @@ function requestPrompt(params: GenerationCreateParams) {
     : params.prompt;
 }
 
+function imageInputKind(value: string): string {
+  if (/^data:image\//i.test(value)) return 'data-url';
+  if (/^https?:\/\//i.test(value)) return 'remote-url';
+  if (/^blob:/i.test(value)) return 'blob-url';
+  return 'other';
+}
+
 const PROVIDER_REQUEST_TIMEOUT_MS = 180_000;
 
 async function fetchWithTimeout(
@@ -156,15 +182,19 @@ async function createEditResponse(args: {
   form.set('n', String(Math.max(1, Math.min(10, Math.floor(args.params.count || 1)))));
   form.set('size', imageSize(args.params.aspectRatio));
   form.set('quality', imageQuality(args.params.quality));
+  if (args.params.inputFidelity) form.set('input_fidelity', args.params.inputFidelity);
+  form.set('output_format', 'png');
 
   const blobs = await Promise.all(args.imageInputs.map((imageInput) => imageInputToBlob(imageInput)));
-  const imageField = args.imageInputs.length === 1 ? 'image' : 'image[]';
   blobs.forEach((blob, index) => {
-    form.append(imageField, blob, imageFilename(args.imageInputs[index], index));
+    form.append('image', blob, imageFilename(args.imageInputs[index], index));
   });
   return fetchWithTimeout(args.endpoint, {
     method: 'POST',
-    headers: { authorization: `Bearer ${args.apiKey}` },
+    headers: {
+      authorization: `Bearer ${args.apiKey}`,
+      accept: '*/*',
+    },
     body: form,
   });
 }
@@ -198,6 +228,22 @@ export function createOpenAICompatibleProvider(): ImageGenerationProvider {
           `A maximum of ${MAX_GENERATION_REFERENCE_IMAGES} reference images is supported.`,
         );
       }
+      const providerPrompt = requestPrompt(params);
+      console.info('[op:provider:openai-compatible:create:start]', {
+        model,
+        mode: imageInputs.length ? 'edit' : 'generation',
+        endpoint: imageInputs.length ? editEndpoint : endpoint,
+        aspectRatio: params.aspectRatio,
+        size: imageSize(params.aspectRatio),
+        quality: imageQuality(params.quality),
+        inputFidelity: params.inputFidelity || null,
+        imageInputCount: imageInputs.length,
+        imageField: imageInputs.length ? 'image' : null,
+        imageInputs: imageInputs.map((value) => ({ kind: imageInputKind(value), length: value.length })),
+        promptLen: providerPrompt.length,
+        hasCommerceContract: providerPrompt.includes('Non-negotiable commerce asset contract:'),
+        hasUserPromptMarker: providerPrompt.includes('User prompt, verbatim:'),
+      });
       const response = imageInputs.length
         ? await createEditResponse({
             endpoint: editEndpoint,
@@ -218,6 +264,7 @@ export function createOpenAICompatibleProvider(): ImageGenerationProvider {
               n: Math.max(1, Math.min(4, Math.floor(params.count || 1))),
               size: imageSize(params.aspectRatio),
               quality: imageQuality(params.quality),
+              output_format: 'png',
             }),
           });
 

@@ -1,8 +1,19 @@
+import { getDb } from '~/db/client';
+import type { AssetOwnerIdentity } from '~/lib/assets/asset-owner';
+import { getImageAssetsBucket } from '~/lib/assets/cloudflare-r2';
+import {
+  persistGeneratedImageOutputs,
+  resolveGenerationImageAssetInputs,
+} from '~/lib/assets/asset-service';
 import {
   consumeGenerationCredits,
   getGenerationCreditsRejection,
   type GenerationCreditsContext,
 } from '~/lib/generation/generation-credits-policy';
+import {
+  recordGenerationJob,
+  updateGenerationJob,
+} from '~/lib/generation/generation-job-record';
 import { getGenerationImageInputs, MAX_GENERATION_REFERENCE_IMAGES } from '~/lib/generation/image-input';
 import { resolveGenerationProvider } from '~/lib/generation/provider-runtime';
 import {
@@ -25,7 +36,8 @@ type GenerationCreateRequest = Partial<GenerationCreateRequestDto>;
 
 type CreateGenerationContext = {
   cookieHeader: string;
-  userId: string;
+  /** Trusted authenticated or signed-cookie asset identity resolved by the route. */
+  assetOwner: AssetOwnerIdentity;
 };
 
 function safeId() {
@@ -33,11 +45,6 @@ function safeId() {
     (globalThis as any).crypto?.randomUUID?.() ||
     `req_${Date.now()}_${Math.random().toString(16).slice(2)}`
   );
-}
-
-function preview(text: string, max = 120) {
-  const oneLine = String(text || '').replace(/\s+/g, ' ').trim();
-  return oneLine.length <= max ? oneLine : `${oneLine.slice(0, max)}…`;
 }
 
 function normalizeRequest(payload: unknown): GenerationCreateRequest {
@@ -54,7 +61,7 @@ function createCreditsContext(args: {
 }): GenerationCreditsContext {
   return {
     internal: args.internal,
-    userId: args.context.userId,
+    userId: args.context.assetOwner.ownerId || '',
     cookieHeader: args.context.cookieHeader,
     requestedCount: args.requestedCount,
   };
@@ -91,7 +98,7 @@ export async function createGeneration(
     (providerName === 'atlascloud' || providerName === 'replicate');
   const requestedCount =
     typeof request.count === 'number' && Number.isFinite(request.count)
-      ? Math.max(1, Math.floor(request.count))
+      ? Math.min(10, Math.max(1, Math.floor(request.count)))
       : 1;
   const normalizedReferenceImages = getGenerationImageInputs(request);
   if (normalizedReferenceImages.length > MAX_GENERATION_REFERENCE_IMAGES) {
@@ -112,17 +119,55 @@ export async function createGeneration(
     return { status: 429, body: creditsRejection };
   }
 
+  const db = getDb();
+  if (!db) {
+    return { status: 503, body: { error: 'Database not configured' } };
+  }
+  const assetOwnerId = context.assetOwner.ownerId;
+  if (!assetOwnerId || !context.assetOwner.authorizedOwnerIds.includes(assetOwnerId)) {
+    return { status: 503, body: { error: 'Trusted image asset ownership is unavailable.' } };
+  }
+  try {
+    await getImageAssetsBucket();
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Image asset storage is not configured.';
+    return { status: 503, body: { error: message } };
+  }
+
+  let providerImageInputs: string[];
+  try {
+    providerImageInputs = await resolveGenerationImageAssetInputs({
+      db,
+      requesterOwnerIds: context.assetOwner.authorizedOwnerIds,
+      images: normalizedReferenceImages,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unable to read reference image assets.';
+    return { status: 400, body: { error: message } };
+  }
+
   if (useTestMode) {
     const id = safeId();
+    try {
+      await recordGenerationJob({
+        db,
+        provider: 'test',
+        providerJobId: id,
+        ownerId: assetOwnerId,
+        requestedCount,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to record generation job.';
+      return { status: 500, body: { error: message } };
+    }
     console.info('[op:generation:create]', {
       requestId,
       provider: 'test',
       testImageUrl: Boolean(testImageUrl),
       promptLen: prompt.length,
-      promptPreview: preview(prompt),
       aspectRatio: request.aspectRatio,
       quality: request.quality,
-      count: request.count,
+      count: requestedCount,
       elapsedMs: Date.now() - startedAt,
     });
     return {
@@ -146,7 +191,8 @@ export async function createGeneration(
     count: request.count,
     referenceImageCount: normalizedReferenceImages.length,
     promptLen: prompt.length,
-    promptPreview: preview(prompt),
+    promptHasCommerceContract: prompt.includes('Non-negotiable commerce asset contract:'),
+    promptHasUserPromptMarker: prompt.includes('User prompt, verbatim:'),
   });
 
   const provider = resolveGenerationProvider(providerName, apiKey);
@@ -157,6 +203,7 @@ export async function createGeneration(
     };
   }
 
+  let createdProviderJobId: string | null = null;
   try {
     const result = await provider.create({
       prompt,
@@ -164,12 +211,42 @@ export async function createGeneration(
       model: request.model,
       aspectRatio: request.aspectRatio,
       quality: request.quality,
-      count: request.count,
-      referenceImages: Array.isArray(request.referenceImages)
-        ? request.referenceImages
-        : undefined,
-      imageInputs: Array.isArray(request.imageInputs) ? request.imageInputs : undefined,
+      inputFidelity: request.inputFidelity,
+      count: requestedCount,
+      referenceImages: providerImageInputs,
+      imageInputs: undefined,
     });
+    createdProviderJobId = result.providerJobId;
+    await recordGenerationJob({
+      db,
+      provider: providerName,
+      providerJobId: result.providerJobId,
+      ownerId: assetOwnerId,
+      requestedCount,
+      status: result.status === 'succeeded' ? 'running' : result.status,
+    });
+    const persisted =
+      result.status === 'succeeded'
+        ? await persistGeneratedImageOutputs({
+            db,
+            ownerId: assetOwnerId,
+            provider: providerName,
+            providerJobId: result.providerJobId,
+            images: (result.images ?? []).slice(0, requestedCount),
+          })
+        : undefined;
+    if (result.status === 'succeeded' && !persisted?.urls.length) {
+      throw new Error('Generation succeeded but returned no persistable images.');
+    }
+    await updateGenerationJob({
+      db,
+      provider: providerName,
+      providerJobId: result.providerJobId,
+      ownerId: assetOwnerId,
+      status: result.status,
+      resultAssetIds: persisted?.assetIds,
+    });
+
     console.info('[op:generation:create:done]', {
       requestId,
       provider: providerName,
@@ -189,12 +266,22 @@ export async function createGeneration(
           result.providerJobId,
         ),
         status: result.status,
-        images: result.images,
+        images: persisted?.urls,
       },
     };
   } catch (error: unknown) {
     const message =
       error instanceof Error && error.message ? error.message : 'create failed';
+    if (createdProviderJobId) {
+      await updateGenerationJob({
+        db,
+        provider: providerName,
+        providerJobId: createdProviderJobId,
+        ownerId: assetOwnerId,
+        status: 'failed',
+        error: message,
+      }).catch(() => undefined);
+    }
     console.error('[op:generation:create:error]', {
       requestId,
       provider: providerName,

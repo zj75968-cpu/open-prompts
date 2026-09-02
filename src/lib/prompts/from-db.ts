@@ -3,6 +3,9 @@ import type { PromptGalleryItem } from '~/lib/prompts/prompt-model';
 import { getDb } from '~/db/client';
 import { prompts } from '~/db/schema';
 import {
+  normalizePromptImageReferences,
+} from '~/lib/prompts/prompt-asset';
+import {
   normalizeSubmitCategoryKey,
   type SubmitCategoryKey,
 } from '~/lib/prompts/prompt-categories';
@@ -23,9 +26,11 @@ function rowToItem(row: {
   createdAt: Date;
 }): PromptGalleryItem {
   const tags = Array.isArray(row.tags) ? row.tags.filter((t) => typeof t === 'string' && t.trim()) : [];
-  const images = Array.isArray(row.images)
-    ? row.images.filter((u) => typeof u === 'string' && u.trim())
-    : [];
+  const images = normalizePromptImageReferences(
+    Array.isArray(row.images)
+      ? row.images.filter((url) => typeof url === 'string' && url.trim())
+      : [],
+  );
   const item: PromptGalleryItem = {
     id: row.slug,
     title: row.title?.trim() || 'Untitled',

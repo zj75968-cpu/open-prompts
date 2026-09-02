@@ -1,5 +1,5 @@
 import type {
-  AdminTemplateRecord,
+  AdminTemplateSummary,
   TemplateRecord,
 } from '~/lib/prompts/template-types';
 import type {
@@ -39,7 +39,7 @@ export type AccountTemplatesPageResponseDto = {
 };
 
 export type AdminTemplatesPageResponseDto = {
-  items: AdminTemplateRecord[];
+  items: AdminTemplateSummary[];
   total: number | null;
   limit: number;
   offset: number;
@@ -82,8 +82,10 @@ export type AdminTemplatesBulkReviewRequestDto = {
   status: AdminTemplateReviewStatusDto;
 };
 
-export type AdminTemplateReviewResponseDto = AccountTemplateResponseDto & {
+export type AdminTemplateReviewResponseDto = {
   ok: true;
+  id: number;
+  status: AdminTemplateReviewStatusDto;
 };
 
 export type AdminTemplatesBulkReviewResponseDto = {

@@ -7,6 +7,12 @@ import type {
   PromptTemplateMutationResponseDto,
   PromptWriteRequestDto,
 } from '~/lib/prompts/prompt-dto';
+import {
+  persistPromptImageInputs,
+  preparePromptImageAssets,
+  reconcilePromptImageAssetVisibility,
+} from '~/lib/assets/asset-service';
+import { resolveAssetOwner } from '~/lib/assets/asset-owner';
 import { getDb } from '~/db/client';
 import { requireAuthSession } from '~/lib/auth/session';
 import { parseTemplateBody } from '~/lib/prompts/parse-template-body';
@@ -85,17 +91,40 @@ export async function POST(req: Request) {
     if (duplicate) {
       return NextResponse.json({ error: 'duplicate_x_source', duplicate }, { status: 409 });
     }
-    const item = await insertUserTemplate(db, session.user.id, {
-      title: v.title,
-      description: v.description,
-      prompt: v.prompt,
-      modelLabel: v.modelLabel,
-      category: v.category,
-      tags: v.tags,
+    const assetOwner = await resolveAssetOwner({
+      cookieHeader: req.headers.get('cookie') || '',
+      userId: session.user.id,
+      issueAnonymous: false,
+    });
+    if (!assetOwner.ownerId) throw new Error('Unable to resolve image asset owner.');
+    const images = await persistPromptImageInputs({
+      db,
+      ownerId: assetOwner.ownerId,
       images: v.images,
-      visibility: v.visibility,
-      sourceUrl: v.sourceUrl,
-      authorHandle: v.authorHandle,
+    });
+    const item = await db.transaction(async (tx) => {
+      const transactionDb = tx as unknown as typeof db;
+      await preparePromptImageAssets({
+        db: transactionDb,
+        ownerId: assetOwner.ownerId!,
+        authorizedOwnerIds: assetOwner.authorizedOwnerIds,
+        visibility: 'private',
+        images,
+      });
+      const inserted = await insertUserTemplate(transactionDb, session.user.id, {
+        title: v.title,
+        description: v.description,
+        prompt: v.prompt,
+        modelLabel: v.modelLabel,
+        category: v.category,
+        tags: v.tags,
+        images,
+        visibility: v.visibility,
+        sourceUrl: v.sourceUrl,
+        authorHandle: v.authorHandle,
+      });
+      await reconcilePromptImageAssetVisibility({ db: transactionDb, images });
+      return inserted;
     });
     const response: PromptTemplateMutationResponseDto = { ok: true, item };
     return NextResponse.json(response);

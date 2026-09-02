@@ -1,82 +1,59 @@
-export const runtime = 'nodejs';
+import { imageInputFromRemoteUrl } from '~/lib/assets/image-input';
 
-function isHttpUrl(u: string): boolean {
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+const ALLOWED_PROXY_HOSTS = new Set([
+  'cdn-images.toolify.ai',
+  'pbs.twimg.com',
+]);
+
+function isAllowedProxyUrl(value: string): boolean {
   try {
-    const url = new URL(u);
-    return url.protocol === 'http:' || url.protocol === 'https:';
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase().replace(/\.$/, '');
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') &&
+      (ALLOWED_PROXY_HOSTS.has(host) || host.endsWith('.twimg.com'))
+    );
   } catch {
     return false;
   }
 }
 
-const UA_GENERIC =
-  'Mozilla/5.0 (compatible; open-prompts-image-proxy/1.0; +https://github.com/rudy2steiner/open-prompts)';
-/** Twimg often 403s without a normal browser UA + twitter referer. */
-const UA_CHROME =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-
-function upstreamRequestHeaders(targetUrl: string): Record<string, string> {
-  const headers: Record<string, string> = {
-    'user-agent': UA_GENERIC,
-    accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-  };
-  try {
-    const host = new URL(targetUrl).hostname.toLowerCase();
-    if (host.endsWith('twimg.com') || host === 'pbs.twimg.com' || host.endsWith('.twimg.com')) {
-      headers['user-agent'] = UA_CHROME;
-      headers.referer = 'https://twitter.com/';
-      headers.origin = 'https://twitter.com';
-    }
-  } catch {
-    // ignore
-  }
-  return headers;
+function errorStatus(message: string): number {
+  if (/size limit|exceeds/i.test(message)) return 413;
+  if (/invalid|must use|credentials|public host|unsupported/i.test(message)) return 400;
+  return 502;
 }
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const url = String(searchParams.get('url') || '').trim();
-  if (!url || !isHttpUrl(url)) {
-    return new Response(JSON.stringify({ error: 'Missing or invalid url' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    });
+  const url = String(new URL(req.url).searchParams.get('url') || '').trim();
+  if (!url) {
+    return Response.json({ error: 'Missing url' }, { status: 400 });
+  }
+  if (!isAllowedProxyUrl(url)) {
+    return Response.json({ error: 'Remote image host is not allowed.' }, { status: 403 });
   }
 
-  // Best-effort proxy for hotlink-protected images.
-  // If the upstream still requires auth/signatures, this will still fail.
-  const upstream = await fetch(url, {
-    headers: upstreamRequestHeaders(url),
-    cache: 'no-store',
-    redirect: 'follow',
-  }).catch((e: any) => ({ ok: false, status: 502, statusText: e?.message || 'fetch failed' } as any));
-
-  if (!upstream?.ok) {
-    return new Response(JSON.stringify({ error: 'Upstream fetch failed', status: upstream?.status || 502 }), {
-      status: 502,
-      headers: { 'content-type': 'application/json' },
+  try {
+    const image = await imageInputFromRemoteUrl(url);
+    const body = new ArrayBuffer(image.bytes.byteLength);
+    new Uint8Array(body).set(image.bytes);
+    return new Response(body, {
+      status: 200,
+      headers: {
+        'content-type': image.mimeType,
+        'content-length': String(image.bytes.byteLength),
+        'cache-control': 'public, max-age=3600',
+        'x-content-type-options': 'nosniff',
+      },
     });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Remote image fetch failed.';
+    return Response.json(
+      { error: message },
+      { status: errorStatus(message) },
+    );
   }
-
-  const rawType = upstream.headers.get('content-type') || '';
-  const contentTypeLower = rawType.split(';')[0]?.trim().toLowerCase() || '';
-  if (contentTypeLower.includes('text/html')) {
-    return new Response(JSON.stringify({ error: 'Upstream returned HTML (likely blocked or login wall)' }), {
-      status: 502,
-      headers: { 'content-type': 'application/json' },
-    });
-  }
-
-  const contentType = rawType || 'application/octet-stream';
-  const buf = await upstream.arrayBuffer();
-
-  return new Response(buf, {
-    status: 200,
-    headers: {
-      'content-type': contentType,
-      // Cache a bit to reduce repeated upstream hits.
-      'cache-control': 'public, max-age=3600',
-    },
-  });
 }
-

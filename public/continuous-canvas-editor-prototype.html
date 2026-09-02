@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>连续画布编辑器 · A+ Studio</title>
+  <style>
+    :root {
+      --bg: #0b0c12;
+      --panel: rgba(22, 24, 35, .86);
+      --panel-2: #171925;
+      --line: rgba(255,255,255,.09);
+      --muted: #8e92a5;
+      --text: #f4f5fb;
+      --purple: #8c73ff;
+      --cyan: #62d4e9;
+      --green: #80e4b0;
+      --shadow: 0 24px 70px rgba(0,0,0,.28);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 70% -10%, rgba(108,86,255,.19), transparent 32rem),
+        radial-gradient(circle at 0% 75%, rgba(55,167,210,.10), transparent 28rem),
+        var(--bg);
+      font: 14px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .app { min-height: 100vh; display: grid; grid-template-rows: 66px 1fr; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid var(--line); background: rgba(10,11,17,.72); backdrop-filter: blur(18px); position: sticky; top: 0; z-index: 10; }
+    .brand { display: flex; align-items: center; gap: 11px; font-weight: 750; letter-spacing: -.02em; }
+    .brand-mark { width: 31px; height: 31px; border-radius: 10px; background: linear-gradient(135deg, #b49cff, #5f5be8 58%, #62d4e9); box-shadow: 0 0 24px rgba(126,102,255,.45); position: relative; }
+    .brand-mark:after { content: ""; position: absolute; inset: 8px; border: 2px solid white; border-radius: 6px; transform: rotate(45deg); opacity: .85; }
+    .brand small { display: block; color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: 0; }
+    .top-actions { display: flex; align-items: center; gap: 10px; }
+    .top-link, .icon-btn { color: #c1c4d4; background: transparent; border: 1px solid transparent; padding: 8px 11px; border-radius: 9px; }
+    .top-link:hover, .icon-btn:hover { background: rgba(255,255,255,.06); border-color: var(--line); color: white; }
+    .avatar { width: 31px; height: 31px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg,#f4a3c7,#8772ff); font-size: 12px; font-weight: 750; color: white; }
+    .workspace { width: min(1640px, 100%); margin: 0 auto; padding: 24px 26px 32px; display: grid; grid-template-columns: 300px minmax(0, 1fr); grid-template-areas: "inspector inspector" "chat canvas"; gap: 18px; min-height: 0; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 17px; box-shadow: var(--shadow); backdrop-filter: blur(16px); min-width: 0; }
+    .panel-header { padding: 18px 18px 14px; border-bottom: 1px solid var(--line); }
+    .panel-title { font-weight: 700; font-size: 14px; }
+    .panel-kicker { color: var(--muted); font-size: 11px; margin-top: 3px; }
+    .chat-panel { grid-area: chat; display: flex; flex-direction: column; min-height: 700px; max-height: calc(100vh - 122px); overflow: hidden; }
+    .chat-log { padding: 15px; overflow: auto; flex: 1; }
+    .message { margin: 0 0 17px; max-width: 94%; }
+    .message.user { margin-left: auto; }
+    .message-meta { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; margin-bottom: 6px; }
+    .message.user .message-meta { justify-content: flex-end; }
+    .mini-avatar { width: 19px; height: 19px; display: grid; place-items: center; border-radius: 6px; background: linear-gradient(135deg,#7d70ff,#43c8d9); font-size: 9px; color: white; font-weight: 800; }
+    .message.user .mini-avatar { background: #343747; }
+    .bubble { padding: 11px 12px; border-radius: 12px 12px 12px 3px; color: #d9dbea; background: rgba(255,255,255,.055); border: 1px solid var(--line); font-size: 13px; }
+    .message.user .bubble { border-radius: 12px 12px 3px 12px; background: linear-gradient(135deg,rgba(105,89,238,.38),rgba(64,114,185,.3)); border-color: rgba(139,119,255,.32); color: white; }
+    .message.system .bubble { border-color: rgba(128,228,176,.24); background: rgba(79,179,129,.075); }
+    .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 9px var(--green); }
+    .chat-composer { padding: 13px; border-top: 1px solid var(--line); }
+    .suggestions { display: flex; gap: 6px; overflow: auto; padding-bottom: 9px; scrollbar-width: thin; }
+    .suggestion { flex: 0 0 auto; color: #bcb6ff; border: 1px solid rgba(140,115,255,.3); border-radius: 999px; background: rgba(116,96,230,.1); padding: 6px 9px; font-size: 11px; }
+    .suggestion:hover { background: rgba(140,115,255,.23); }
+    .compose-row { display: flex; gap: 8px; align-items: flex-end; }
+    .compose-row textarea { resize: none; min-height: 44px; max-height: 100px; flex: 1; padding: 11px 12px; color: white; background: #10111a; border: 1px solid var(--line); border-radius: 11px; outline: none; }
+    .compose-row textarea:focus { border-color: rgba(140,115,255,.75); box-shadow: 0 0 0 3px rgba(140,115,255,.12); }
+    .send-btn, .primary-btn { border: 0; color: white; font-weight: 700; background: linear-gradient(135deg, #8971ff, #5c79e9); border-radius: 10px; padding: 11px 13px; box-shadow: 0 7px 18px rgba(103,91,235,.26); }
+    .send-btn:hover, .primary-btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
+    .canvas-column { grid-area: canvas; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+    .canvas-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 12px; }
+    .canvas-toolbar strong { color: var(--text); font-size: 14px; }
+    .toolbar-actions { display: flex; gap: 7px; }
+    .tool-btn { border: 1px solid var(--line); color: #ced0dc; background: rgba(255,255,255,.045); border-radius: 9px; padding: 7px 10px; }
+    .tool-btn:hover { border-color: rgba(140,115,255,.55); color: white; }
+    .canvas-shell { border: 1px solid var(--line); border-radius: 17px; padding: 14px; background: rgba(14,15,23,.83); box-shadow: var(--shadow); overflow: visible; }
+    .canvas-meta { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 11px; padding: 0 2px 12px; }
+    .live { color: var(--green); display: flex; gap: 6px; align-items: center; }
+    .artboard-wrap { overflow: visible; padding-bottom: 4px; display: flex; justify-content: center; }
+    .artboard { width: min(100%, 760px); height: 1800px; max-width: 760px; position: relative; overflow: hidden; border-radius: 5px; background: linear-gradient(180deg,#ebedf5 0%,#e8ebf6 27%,#dae5f1 53%,#eef1f4 100%); color: #18243b; box-shadow: 0 15px 40px rgba(0,0,0,.35); transition: background .45s ease, filter .45s ease; }
+    .artboard.dark { background: linear-gradient(115deg,#121827,#1c2432 35%,#172333 66%,#0d131e); color: #f5f5f0; }
+    .artboard.gray { background: linear-gradient(115deg,#dedfdf,#f0f0ec 42%,#d7d8d8 100%); }
+    .artboard:before { content: ""; position: absolute; width: 120%; height: 900px; top: -260px; left: -10%; border-radius: 50%; background: radial-gradient(circle,rgba(255,255,255,.72),rgba(255,255,255,0) 69%); opacity: .72; }
+    .dark.artboard:before { background: radial-gradient(circle,rgba(100,165,236,.19),rgba(100,165,236,0) 67%); opacity: 1; }
+    .flow-line { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; pointer-events: none; background: linear-gradient(180deg,transparent 0 19%,rgba(78,107,160,.08) 19.1%,transparent 19.5% 39%,rgba(78,107,160,.06) 39.1%,transparent 39.5% 59%,rgba(78,107,160,.06) 59.1%,transparent 59.5% 79%,rgba(78,107,160,.07) 79.1%,transparent 79.5%); }
+    .dark .flow-line { background: linear-gradient(180deg,transparent 0 19%,rgba(129,185,255,.13) 19.1%,transparent 19.5% 39%,rgba(129,185,255,.09) 39.1%,transparent 39.5% 59%,rgba(129,185,255,.09) 59.1%,transparent 59.5% 79%,rgba(129,185,255,.12) 79.1%,transparent 79.5%); }
+    .section { position: absolute; left: 0; width: 100%; height: 20%; padding: 48px 9%; }
+    .section-1 { top: 0; padding-top: 46px; }
+    .section-2 { top: 20%; padding-top: 56px; }
+    .section-3 { top: 40%; padding-top: 56px; }
+    .section-4 { top: 60%; padding-top: 56px; }
+    .section-5 { top: 80%; padding-top: 56px; }
+    .eyebrow { text-transform: uppercase; letter-spacing: .17em; font-size: 11px; font-weight: 800; color: #7381a1; }
+    .dark .eyebrow { color: #89b7dd; }
+    .section h2 { margin: 10px 0 10px; font-size: 29px; line-height: 1.08; letter-spacing: -.06em; }
+    .section p { margin: 0; color: #5b6982; font-size: 13px; line-height: 1.65; max-width: 205px; }
+    .dark .section p { color: #aab9cc; }
+    .brand-pill { display: inline-flex; align-items: center; gap: 7px; border: 1px solid rgba(42,64,101,.16); padding: 7px 10px; border-radius: 99px; font-size: 11px; font-weight: 800; letter-spacing: .08em; background: rgba(255,255,255,.4); }
+    .dark .brand-pill { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.13); }
+    .brand-pill i { width: 7px; height: 7px; display: inline-block; border-radius: 50%; background: #6c73f1; }
+    .product { position: absolute; width: 196px; height: 270px; left: 50%; top: 24%; margin-left: -98px; transition: transform .5s ease; filter: drop-shadow(22px 24px 23px rgba(32,42,66,.27)); }
+    .product.large { transform: scale(1.15); }
+    .product .lamp-head { position: absolute; width: 95px; height: 45px; top: 11px; left: 53px; border-radius: 50% 50% 38% 38%; transform: rotate(-19deg); background: linear-gradient(150deg,#edf5fc,#96b5ca 64%,#617d96); box-shadow: inset -7px -7px 12px rgba(42,66,91,.24); }
+    .dark .product .lamp-head { background: linear-gradient(150deg,#d8ecf7,#63839b 64%,#3b4f64); }
+    .product .lamp-glow { position: absolute; width: 112px; height: 78px; left: 43px; top: 32px; border-radius: 50%; background: radial-gradient(ellipse at top,rgba(255,248,204,.72),transparent 68%); transform: rotate(-18deg); opacity: .75; }
+    .product .arm { position: absolute; width: 18px; height: 145px; left: 91px; top: 50px; border-radius: 10px; background: linear-gradient(90deg,#728ea2,#dcebf1 46%,#7991a4); transform: rotate(14deg); box-shadow: inset -3px 0 4px rgba(34,55,75,.27); }
+    .product .joint { position: absolute; width: 28px; height: 28px; left: 78px; top: 178px; border-radius: 50%; background: #607b91; box-shadow: inset 5px 3px 8px rgba(226,244,255,.4); }
+    .product .base { position: absolute; width: 137px; height: 30px; left: 28px; top: 205px; border-radius: 55% 55% 40% 40%; background: linear-gradient(170deg,#b8d0dd,#587389); transform: perspective(120px) rotateX(28deg); box-shadow: 0 8px 5px rgba(28,43,63,.25); }
+    .product .base:after { content: ""; position: absolute; width: 25px; height: 6px; top: 10px; left: 74px; border-radius: 50%; background: #435c71; }
+    .scene-card { position: absolute; width: 42%; height: 210px; left: 49%; top: 82%; border-radius: 10px; background: linear-gradient(140deg,rgba(255,255,255,.7),rgba(151,177,191,.35)), linear-gradient(0deg,#b7c9cb 0 19%,transparent 19%); box-shadow: 0 16px 25px rgba(50,69,89,.16); overflow: hidden; transition: background .5s ease; }
+    .dark .scene-card { background: linear-gradient(140deg,rgba(108,157,184,.38),rgba(27,42,57,.65)), linear-gradient(0deg,#172f3b 0 19%,transparent 19%); }
+    .scene-card.bedroom { background: linear-gradient(140deg,rgba(255,226,196,.84),rgba(198,165,159,.48)), linear-gradient(0deg,#8e6c68 0 19%,transparent 19%); }
+    .scene-card:before { content:""; position:absolute; width:90px; height:90px; right:-18px; top:-18px; border-radius:50%; border:15px solid rgba(255,255,255,.38); box-shadow: 0 0 0 14px rgba(255,255,255,.14); }
+    .scene-card:after { content:""; position:absolute; width:155px; height:58px; left:18px; bottom:27px; background:rgba(50,73,86,.31); border-radius: 45% 45% 4px 4px; transform: perspective(70px) rotateX(18deg); }
+    .scene-person { position:absolute; width:28px; height:64px; left:74px; top:61px; border-radius: 14px 14px 7px 7px; background: #536a7b; z-index:2; }
+    .scene-person:before { content:""; position:absolute; width:24px; height:24px; top:-20px; left:2px; border-radius:50%; background:#dfb395; }
+    .scene-person:after { content:""; position:absolute; width:35px; height:12px; top:18px; left:-5px; background:#748e9d; border-radius: 8px; transform: rotate(-24deg); }
+    .scene-label { position: absolute; bottom: 9px; left: 12px; z-index: 3; color: rgba(255,255,255,.9); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+    .detail-line { position: absolute; left: 52%; top: 69%; width: 32%; height: 1px; background: rgba(70,98,127,.55); }
+    .detail-line:before, .detail-line:after { content:""; position:absolute; width: 5px; height: 5px; border-radius:50%; top:-2px; background:#5572aa; }
+    .detail-line:before { left:0; } .detail-line:after { right:0; }
+    .detail-label { position:absolute; left: 55%; top: 65%; font-size: 11px; color:#5d7191; font-weight: 700; }
+    .dark .detail-label { color:#b8d2e5; }
+    .copy-badge { position: absolute; left: 9%; top: 35%; background: rgba(255,255,255,.38); border: 1px solid rgba(62,88,121,.18); border-radius: 8px; padding: 10px 12px; font-size: 11px; color: #53647e; backdrop-filter: blur(6px); }
+    .dark .copy-badge { background: rgba(255,255,255,.08); color: #c1d0df; border-color: rgba(255,255,255,.15); }
+    .caption-layer { position: absolute; left: 0; right: 0; bottom: 0; height: 43px; display: flex; justify-content: space-between; align-items: center; padding: 0 9%; color: rgba(35,55,81,.68); font-size: 10px; letter-spacing: .11em; text-transform: uppercase; border-top: 1px solid rgba(46,67,96,.10); }
+    .dark .caption-layer { color: rgba(223,236,247,.62); border-color: rgba(255,255,255,.12); }
+    .inspector { grid-area: inspector; min-height: auto; max-height: none; overflow: visible; display: grid; grid-template-columns: minmax(180px,1.1fr) minmax(180px,1.1fr) minmax(240px,1.4fr) minmax(180px,1fr); align-items: stretch; }
+    .inspector-section { padding: 17px 18px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); min-width: 0; }
+    .inspector-section:last-child { border-right: 0; }
+    .inspector-section h3 { font-size: 12px; margin: 0 0 13px; color: #c6c8d5; }
+    .select { width: 100%; color: #e9eaf1; background: #10111a; border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px; outline: none; }
+    .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 13px 0; color: #b6b9c9; font-size: 12px; }
+    .switch { width: 35px; height: 20px; border-radius: 99px; padding: 2px; background: #343746; border: 0; transition: .2s; }
+    .switch:after { content:""; display:block; width:16px; height:16px; border-radius:50%; background:#a5a8b6; transition:.2s; }
+    .switch.on { background: linear-gradient(100deg,#7c6bf0,#4abcca); }
+    .switch.on:after { transform: translateX(15px); background: white; }
+    .version { display:flex; align-items:center; gap:9px; width:100%; padding: 9px 8px; margin: 4px 0; color:#bfc2d1; border:1px solid transparent; background:transparent; border-radius:9px; text-align:left; }
+    .version:hover, .version.active { border-color:rgba(140,115,255,.34); background:rgba(120,100,228,.12); color:white; }
+    .version-thumb { width: 48px; height: 30px; border-radius: 5px; background: linear-gradient(110deg,#e8edf5,#b9d5e1 48%,#e8e8df); position:relative; overflow:hidden; }
+    .version-thumb:after { content:""; width:15px; height:22px; position:absolute; left:22px; top:4px; border-radius:50% 50% 20% 20%; background:#66869a; }
+    .version-copy { min-width:0; } .version-copy strong { display:block; font-size:11px; } .version-copy span { display:block; color:var(--muted); font-size:10px; margin-top:2px; }
+    .version-current { color: var(--green)!important; }
+    .export { width:100%; margin-top:3px; }
+    .foot-note { color: #777b8e; font-size: 11px; margin: 11px 0 0; }
+    .toast { position:fixed; left:50%; bottom:24px; transform:translate(-50%, 20px); padding:10px 14px; border:1px solid rgba(128,228,176,.3); border-radius:10px; background:rgba(24,39,37,.95); color:#d5f5e3; opacity:0; pointer-events:none; transition:.25s; z-index:30; box-shadow:var(--shadow); }
+    .toast.show { opacity:1; transform:translate(-50%,0); }
+    @media (max-width: 1180px) { .workspace { grid-template-columns: 270px minmax(460px,1fr); } .inspector { grid-column: 1 / -1; min-height: auto; max-height:none; display:grid; grid-template-columns:repeat(3,1fr); } .inspector .panel-header { grid-column:1/-1; } }
+    @media (max-width: 760px) { .topbar { padding: 0 15px; } .top-link { display:none; } .workspace { padding: 14px; display:grid; grid-template-columns:1fr; grid-template-areas:"inspector" "canvas" "chat"; } .chat-panel { min-height: 530px; max-height:none; } .canvas-column { min-width:0; } .inspector { display:grid; grid-template-columns:1fr; } .inspector .panel-header { grid-column:auto; } .inspector-section { border-right:0; } .canvas-toolbar { align-items:flex-start; flex-direction:column; } .artboard { width:100%; max-width:100%; } .canvas-shell { padding:10px; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark"></span><div>A+ Canvas Studio<small>连续画布 · 对话式编辑原型</small></div></div>
+      <div class="top-actions"><button class="top-link" id="newProject">＋ 新建画布</button><button class="top-link" id="help">使用说明</button><span class="avatar">OP</span></div>
+    </header>
+
+    <main class="workspace">
+      <aside class="panel chat-panel">
+        <div class="panel-header"><div class="panel-title">和画布对话</div><div class="panel-kicker">描述你想修改的地方，其他内容会尽量保持不变</div></div>
+        <div class="chat-log" id="chatLog">
+          <div class="message system"><div class="message-meta"><span class="mini-avatar">AI</span><span>画布助手 · 刚刚</span></div><div class="bubble">我已经生成了一张完整的 A+ 连屏画布。五个区域共享同一条背景光线和视觉动线，接下来可以直接告诉我想怎么改。</div></div>
+          <div class="message user"><div class="message-meta"><span>你 · 刚刚</span><span class="mini-avatar">你</span></div><div class="bubble">整体做成高级、干净的电商长图，产品外观必须保持一致。</div></div>
+          <div class="message system"><div class="message-meta"><span class="mini-avatar">AI</span><span>画布助手 · 刚刚</span></div><div class="bubble">好的。已锁定商品外观，并保留连续背景。现在是 <b>v1 初稿</b>。</div></div>
+        </div>
+        <div class="chat-composer">
+          <div class="suggestions"><button class="suggestion">把背景改成浅灰色</button><button class="suggestion">产品放大 15%</button><button class="suggestion">改成深色高级风</button><button class="suggestion">右侧换成卧室场景</button></div>
+          <div class="compose-row"><textarea id="promptInput" rows="1" placeholder="例如：把第三个区域的产品细节放大一些…"></textarea><button class="send-btn" id="sendBtn">发送</button></div>
+        </div>
+      </aside>
+
+      <section class="canvas-column">
+        <div class="canvas-toolbar"><div><strong>智能护眼台灯 · A+ 纵向连屏画布</strong><span>　/　正在编辑 v3</span></div><div class="toolbar-actions"><button class="tool-btn" id="zoomBtn">⌕ 适应画布</button><button class="tool-btn" id="downloadBtn">↓ 导出预览</button></div></div>
+        <div class="canvas-shell">
+          <div class="canvas-meta"><span>纵向连续画布 · 1464 × 1800 px · 页面上下滚动 · AI 画面层 + 确定性文字层</span><span class="live"><i class="status-dot"></i> 已保存</span></div>
+          <div class="artboard-wrap"><div class="artboard" id="artboard">
+            <div class="flow-line"></div>
+            <div class="section section-1"><span class="brand-pill"><i></i> LUMEN / 01</span><div style="margin-top:39px" class="eyebrow">FIND YOUR FOCUS</div><h2>让每一束光，<br>都更有方向。</h2><p>为长时间工作而设计的柔和光线，安静地融入你的桌面。</p></div>
+            <div class="section section-2"><div class="eyebrow">01 / 问题</div><h2>告别<br>刺眼反光</h2><p>从办公桌到深夜阅读，稳定的光线让专注自然发生。</p><div class="copy-badge">柔和漫射 · 减少视觉干扰</div></div>
+            <div class="section section-3"><div class="eyebrow">02 / 结构</div><h2>灵活调节<br>每个角度</h2><p>多段支架配合稳固底座，光线随你的工作状态移动。</p></div>
+            <div class="section section-4"><div class="eyebrow">03 / 细节</div><h2>细节，<br>值得被看见</h2><p>金属质感与圆润边角，兼顾功能和桌面美学。</p><span class="detail-label">可调节灯头</span><span class="detail-line"></span></div>
+            <div class="section section-5"><div class="eyebrow">04 / 场景</div><h2>从书桌到<br>生活空间</h2><p>在不同空间里，保持恰到好处的照明陪伴。</p></div>
+            <div class="product" id="product"><span class="lamp-glow"></span><span class="lamp-head"></span><span class="arm"></span><span class="joint"></span><span class="base"></span></div>
+            <div class="scene-card" id="sceneCard"><span class="scene-person"></span><span class="scene-label">quiet evening</span></div>
+            <div class="caption-layer"><span>CONTINUOUS A+ STORY / PRODUCT IDENTITY LOCKED</span><span>Designed for everyday focus</span></div>
+          </div></div>
+        </div>
+      </section>
+
+      <aside class="panel inspector">
+        <div class="panel-header"><div class="panel-title">全局画布设置</div><div class="panel-kicker">先确定整张纵向连屏的方向，再通过对话修改图片</div></div>
+        <div class="inspector-section"><h3>画布比例</h3><select class="select" id="ratioSelect"><option value="short">1464 : 600 · 短版横幅</option><option value="standard" selected>1464 : 1800 · 纵向 A+ 连屏</option><option value="long">1464 : 2400 · 长版详情页</option></select><p class="foot-note">页面和手机都通过上下滚动查看，不需要左右滑动。</p></div>
+        <div class="inspector-section"><h3>生成约束</h3><div class="setting-row"><span>保留商品外观</span><button class="switch on" data-setting="identity"></button></div><div class="setting-row"><span>连续背景</span><button class="switch on" data-setting="continuity"></button></div><div class="setting-row"><span>文字后期排版</span><button class="switch on" data-setting="type"></button></div></div>
+        <div class="inspector-section"><h3>历史版本 <span style="float:right;color:var(--muted);font-weight:400">自动保存</span></h3><button class="version" data-version="1"><span class="version-thumb"></span><span class="version-copy"><strong>v1 · 初始构图</strong><span>今天 14:26</span></span></button><button class="version" data-version="2"><span class="version-thumb"></span><span class="version-copy"><strong>v2 · 调整背景</strong><span>今天 14:29</span></span></button><button class="version active" data-version="3"><span class="version-thumb"></span><span class="version-copy"><strong>v3 · 产品比例 <em class="version-current">当前</em></strong><span>今天 14:31</span></span></button><div id="newVersions"></div></div>
+        <div class="inspector-section"><button class="primary-btn export" id="exportBtn">导出当前版本</button><p class="foot-note">导出会保留完整画布，也可以在后续切割为独立模块。</p></div>
+      </aside>
+    </main>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script>
+    const $ = (selector) => document.querySelector(selector);
+    const log = $('#chatLog');
+    const input = $('#promptInput');
+    const artboard = $('#artboard');
+    let version = 3;
+    let working = false;
+
+    function addMessage(type, text) {
+      const message = document.createElement('div');
+      message.className = `message ${type}`;
+      const meta = type === 'user'
+        ? '<div class="message-meta"><span>你 · 刚刚</span><span class="mini-avatar">你</span></div>'
+        : '<div class="message-meta"><span class="mini-avatar">AI</span><span>画布助手 · 刚刚</span></div>';
+      message.innerHTML = `${meta}<div class="bubble">${text}</div>`;
+      log.appendChild(message);
+      log.scrollTop = log.scrollHeight;
+    }
+    function toast(text) {
+      const node = $('#toast'); node.textContent = text; node.classList.add('show');
+      window.setTimeout(() => node.classList.remove('show'), 2300);
+    }
+    function applyInstruction(text) {
+      const lower = text.toLowerCase();
+      if (text.includes('浅灰') || lower.includes('gray') || text.includes('灰色')) { artboard.classList.add('gray'); artboard.classList.remove('dark'); }
+      if (text.includes('深色') || text.includes('高级风') || lower.includes('dark')) { artboard.classList.add('dark'); artboard.classList.remove('gray'); }
+      if (text.includes('放大') || text.includes('大 15') || lower.includes('larger')) $('#product').classList.add('large');
+      if (text.includes('卧室') || text.includes('bedroom')) $('#sceneCard').classList.add('bedroom');
+    }
+    function saveNewVersion() {
+      version += 1;
+      const list = $('#newVersions');
+      const item = document.createElement('button'); item.className = 'version active'; item.dataset.version = version;
+      item.innerHTML = `<span class="version-thumb"></span><span class="version-copy"><strong>v${version} · 对话修改 <em class="version-current">当前</em></strong><span>刚刚生成</span></span>`;
+      document.querySelectorAll('.version').forEach((node) => node.classList.remove('active'));
+      list.appendChild(item);
+      item.addEventListener('click', () => toast(`已切换到 v${version}，原型中保留当前视觉状态`));
+    }
+    function send(text = input.value.trim()) {
+      if (!text || working) return;
+      input.value = ''; addMessage('user', text); working = true;
+      addMessage('system', '<span class="status-dot"></span> 正在分析修改范围，并锁定其他区域…');
+      window.setTimeout(() => {
+        applyInstruction(text); saveNewVersion(); working = false;
+        addMessage('system', `已完成修改，生成 <b>v${version}</b>。我保留了商品外观、整体光线和连屏关系，只处理了你的修改指令。`);
+        toast(`v${version} 已生成`);
+      }, 900);
+    }
+    document.querySelectorAll('.suggestion').forEach((button) => button.addEventListener('click', () => { input.value = button.textContent; send(); }));
+    $('#sendBtn').addEventListener('click', () => send());
+    input.addEventListener('keydown', (event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send(); } });
+    document.querySelectorAll('.switch').forEach((button) => button.addEventListener('click', () => { button.classList.toggle('on'); toast(button.classList.contains('on') ? '约束已开启' : '约束已关闭'); }));
+    $('#ratioSelect').addEventListener('change', (event) => { const value = event.target.value; artboard.style.height = value === 'short' ? '600px' : value === 'long' ? '2400px' : '1800px'; toast(`已切换到 ${event.target.options[event.target.selectedIndex].text}`); });
+    $('#zoomBtn').addEventListener('click', () => toast('已将画布适配到当前可视区域'));
+    $('#help').addEventListener('click', () => toast('先生成整体画布，再用左侧对话框进行局部或全局修改'));
+    $('#newProject').addEventListener('click', () => { if (confirm('要清空当前对话并新建画布吗？')) location.reload(); });
+    $('#downloadBtn').addEventListener('click', () => toast('原型预览已准备好（真实版本将导出 PNG）'));
+    $('#exportBtn').addEventListener('click', () => toast('已开始导出完整连屏画布'));
+    document.querySelectorAll('.version[data-version]').forEach((button) => button.addEventListener('click', () => { document.querySelectorAll('.version').forEach((node) => node.classList.remove('active')); button.classList.add('active'); toast(`已选择 ${button.querySelector('strong').textContent.split('·')[0].trim()}`); }));
+  </script>
+  <!-- UI 原型：真实接入时，应将 currentImage 作为 images/edits（或供应商对应的图片编辑接口）输入，并保存每个版本的修改记录。 -->
+</body>
+</html>

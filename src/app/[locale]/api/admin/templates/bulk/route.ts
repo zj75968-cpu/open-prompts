@@ -3,9 +3,14 @@ import type {
   AdminTemplatesBulkReviewRequestDto,
   AdminTemplatesBulkReviewResponseDto,
 } from '~/lib/account/account-dto';
+import { reconcilePromptImageAssetVisibility } from '~/lib/assets/asset-service';
 import { getDb } from '~/db/client';
 import { requireAdminSession } from '~/lib/auth/session';
-import { adminBulkSetReviewStatus, parseReviewStatus } from '~/lib/prompts/template-record';
+import {
+  adminBulkSetReviewStatus,
+  getTemplateImagesByIds,
+  parseReviewStatus,
+} from '~/lib/prompts/template-record';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,7 +52,18 @@ export async function PATCH(req: Request) {
   }
 
   try {
-    const updated = await adminBulkSetReviewStatus(db, ids, status);
+    const updated = await db.transaction(async (tx) => {
+      const transactionDb = tx as unknown as typeof db;
+      const images = await getTemplateImagesByIds(
+        transactionDb,
+        ids,
+        undefined,
+        true,
+      );
+      const count = await adminBulkSetReviewStatus(transactionDb, ids, status);
+      await reconcilePromptImageAssetVisibility({ db: transactionDb, images });
+      return count;
+    });
     const response: AdminTemplatesBulkReviewResponseDto = {
       ok: true,
       updated,

@@ -1,4 +1,4 @@
-import type { AdminTemplateRecord } from '~/lib/prompts/template-types';
+import type { AdminTemplateSummary } from '~/lib/prompts/template-types';
 import type { DailyCountPoint } from '~/lib/users/admin-user-trend';
 import type { ResolvedAccountPanel } from '~/lib/account/account-path';
 
@@ -17,7 +17,7 @@ export type AccountProps = {
   initialPanel: AccountPanel;
   user: AccountUser;
   initialAdmin?: {
-    items: AdminTemplateRecord[];
+    items: AdminTemplateSummary[];
     total: number | null;
     hasMore: boolean;
     pendingCount: number;

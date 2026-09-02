@@ -1,6 +1,7 @@
 import type {
   AccountApiResponseDto,
   AccountDeleteResponseDto,
+  AccountTemplateResponseDto,
   AccountTemplatesPageResponseDto,
   AdminTemplateReviewRequestDto,
   AdminTemplateReviewResponseDto,
@@ -94,6 +95,16 @@ export function getAdminTemplatesPage(
       `/api/admin/templates${adminTemplatesQuery(query)}`,
     ),
     { cache: 'no-store', signal },
+  );
+}
+
+export function getAdminTemplate(
+  locale: string,
+  id: number,
+): Promise<JsonResponse<AccountApiResponseDto<AccountTemplateResponseDto>>> {
+  return requestJson(
+    localeApiPath(locale, `/api/admin/templates/${id}`),
+    { cache: 'no-store' },
   );
 }
 

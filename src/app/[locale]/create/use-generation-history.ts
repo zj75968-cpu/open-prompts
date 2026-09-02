@@ -15,6 +15,7 @@ function normalizeHistoryEntry(raw: unknown): GenerationHistoryEntry | null {
     createdAt: Number(raw.createdAt || Date.now()),
     providerJobId: raw.providerJobId ? String(raw.providerJobId) : null,
     prompt: String(raw.prompt || ''),
+    negativePrompt: String(raw.negativePrompt || ''),
     model: String(raw.model || ''),
     provider: String(raw.provider || ''),
     aspectRatio: String(raw.aspectRatio || ''),
@@ -30,6 +31,7 @@ export function useGenerationHistory(snapshot: {
   images: string[];
   providerJobId: string | null;
   prompt: string;
+  negativePrompt: string;
   model: string;
   provider: string;
   aspectRatio: string;
@@ -80,6 +82,7 @@ export function useGenerationHistory(snapshot: {
       createdAt: Date.now(),
       providerJobId: snapshot.providerJobId,
       prompt: snapshot.prompt,
+      negativePrompt: snapshot.negativePrompt,
       model: snapshot.model,
       provider: snapshot.provider,
       aspectRatio: snapshot.aspectRatio,
@@ -94,6 +97,7 @@ export function useGenerationHistory(snapshot: {
     snapshot.images,
     snapshot.providerJobId,
     snapshot.prompt,
+    snapshot.negativePrompt,
     snapshot.model,
     snapshot.provider,
     snapshot.aspectRatio,

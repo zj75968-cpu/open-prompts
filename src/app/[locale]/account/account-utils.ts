@@ -1,4 +1,4 @@
-import type { AdminTemplateRecord, TemplateRecord } from '~/lib/prompts/template-types';
+import type { AdminTemplateSummary, TemplateRecord } from '~/lib/prompts/template-types';
 
 export type DisplayStatusKey = 'pub' | 'draft' | 'priv' | 'pending' | 'rejected';
 
@@ -56,7 +56,7 @@ export function smoothTrendPath(coords: { x: number; y: number }[], tension = 0.
   return d;
 }
 
-export function displayStatus(item: TemplateRecord | AdminTemplateRecord): DisplayStatusKey {
+export function displayStatus(item: TemplateRecord | AdminTemplateSummary): DisplayStatusKey {
   if (item.status === 'rejected') return 'rejected';
   if (item.status === 'pending') return 'pending';
   if (item.visibility === 'draft') return 'draft';

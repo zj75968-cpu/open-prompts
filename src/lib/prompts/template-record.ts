@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { and, count, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
 import type { Db } from '~/db/client';
 import { prompts, users } from '~/db/schema';
-import type { AdminTemplateRecord } from '~/lib/prompts/template-types';
+import type { AdminTemplateSummary } from '~/lib/prompts/template-types';
 import {
   type PromptReviewStatus,
   type PromptVisibility,
@@ -166,6 +166,39 @@ export async function getTemplateById(db: Db, id: number): Promise<TemplateRecor
   return row ? rowToRecord(row) : null;
 }
 
+export async function getTemplateByIdForUpdate(
+  db: Db,
+  id: number,
+): Promise<TemplateRecord | null> {
+  const [row] = await db
+    .select()
+    .from(prompts)
+    .where(eq(prompts.id, id))
+    .limit(1)
+    .for('update');
+  return row ? rowToRecord(row) : null;
+}
+
+export async function getTemplateImagesByIds(
+  db: Db,
+  ids: number[],
+  userId?: string,
+  lockForUpdate = false,
+): Promise<string[]> {
+  const uniqueIds = Array.from(new Set(ids.filter((id) => Number.isFinite(id) && id > 0)));
+  if (!uniqueIds.length) return [];
+  const conditions = [inArray(prompts.id, uniqueIds)];
+  if (userId) conditions.push(eq(prompts.submittedBy, userId));
+  const query = db
+    .select({ images: prompts.images })
+    .from(prompts)
+    .where(and(...conditions));
+  const rows = lockForUpdate ? await query.for('update') : await query;
+  return Array.from(
+    new Set(rows.flatMap((row) => (Array.isArray(row.images) ? row.images : []))),
+  );
+}
+
 export type ListTemplatesOpts = {
   userId?: string;
   admin?: boolean;
@@ -251,9 +284,26 @@ export async function listTemplatesForAdmin(db: Db, opts: ListAdminTemplatesOpts
   const offset = Math.max(opts.offset ?? 0, 0);
   const where = buildListConditions(opts);
 
+  const thumbnailUrl = sql<string | null>`
+    case
+      when ((${prompts.images})[1]) like 'https://%'
+        or ((${prompts.images})[1]) like 'http://%'
+        or ((${prompts.images})[1]) like '/api/assets/%'
+      then ((${prompts.images})[1])
+      else null
+    end
+  `;
   const rows = await db
     .select({
-      row: prompts,
+      id: prompts.id,
+      title: prompts.title,
+      model: prompts.model,
+      status: prompts.status,
+      visibility: prompts.visibility,
+      submittedBy: prompts.submittedBy,
+      createdAt: prompts.createdAt,
+      updatedAt: prompts.updatedAt,
+      thumbnailUrl,
       submitterEmail: users.email,
     })
     .from(prompts)
@@ -263,9 +313,17 @@ export async function listTemplatesForAdmin(db: Db, opts: ListAdminTemplatesOpts
     .limit(limit)
     .offset(offset);
 
-  const items: AdminTemplateRecord[] = rows.map(({ row, submitterEmail }) => ({
-    ...rowToRecord(row),
-    submitterEmail: submitterEmail ?? null,
+  const items: AdminTemplateSummary[] = rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    model: row.model,
+    status: row.status as PromptReviewStatus,
+    visibility: row.visibility as PromptVisibility,
+    submittedBy: row.submittedBy,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    thumbnailUrl: row.thumbnailUrl,
+    submitterEmail: row.submitterEmail,
   }));
 
   let total: number | null = null;
@@ -288,14 +346,19 @@ export async function listTemplatesForAdmin(db: Db, opts: ListAdminTemplatesOpts
 export async function adminSetReviewStatus(
   db: Db,
   id: number,
-  status: PromptReviewStatus,
-): Promise<TemplateRecord | null> {
+  status: Extract<PromptReviewStatus, 'approved' | 'rejected'>,
+): Promise<{ id: number; status: Extract<PromptReviewStatus, 'approved' | 'rejected'> } | null> {
   const [row] = await db
     .update(prompts)
     .set({ status, updatedAt: new Date() })
     .where(eq(prompts.id, id))
-    .returning();
-  return row ? rowToRecord(row) : null;
+    .returning({ id: prompts.id, status: prompts.status });
+  return row
+    ? {
+        id: row.id,
+        status: row.status as Extract<PromptReviewStatus, 'approved' | 'rejected'>,
+      }
+    : null;
 }
 
 export async function adminBulkSetReviewStatus(
