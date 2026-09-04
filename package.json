@@ -23,6 +23,7 @@
   "dependencies": {
     "@fluentui/react": "^8.114.0",
     "@formatjs/intl-localematcher": "^0.5.4",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@headlessui/react": "^1.7.18",
     "@heroicons/react": "^2.1.1",
     "@monaco-editor/react": "^4.6.0",
